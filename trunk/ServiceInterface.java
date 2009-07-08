@@ -222,13 +222,24 @@ public int authorize_request() 	{
 		parts = aws_access_string.split(":");
 		String aws_access_id = parts[0];
 		String aws_signature = parts[1];
+		
+		DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
+		int http_code = dbm.userExists(aws_access_id);
+		if (http_code > 399) {
+			message = "InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records.";
+			return 403;
+		}
 
-		String our_sign = calculateRFC2104HMAC(string_to_sign,"uV3F3YluFJax1cknvbcGwgjvx4QpvB+leU8dUj2o");
-		System.out.println(our_sign);
+		String aws_private_key = dbm.getPrivateKey(aws_access_id);
+		if (aws_private_key.equals("500")) {
+			return 500;
+		}
+		String our_sign = calculateRFC2104HMAC(string_to_sign,aws_private_key);
 		if (our_sign.equals(aws_signature)) {
 			return 100;
 		} else {
-			return 401;
+			message = "SignatureDoesNotMatch: The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method. For more information, see Authenticating REST Requests and Authenticating SOAP Requests for details.";
+			return 403;
 		} 
 	} catch (Exception s2serror) {
 		s2serror.printStackTrace();
@@ -265,6 +276,7 @@ public int authorize_request() 	{
 			return 200;
 		} else {
 			boolean success = file_delete();
+			message = "BadDigest: The Content-MD5 you specified did not match what we received.";
 			return 400;
 		}
 	}
@@ -299,7 +311,6 @@ public int authorize_request() 	{
 		if (output.equals((String)request_ht.get("content-md5"))) {
 			return 200;
 		} else {
-			System.out.println(output + " did not match " + (String)request_ht.get("content-md5"));
 			return 400;
 		}
 	}
@@ -367,6 +378,7 @@ public int authorize_request() 	{
 			return 200;
 		} else {
 			System.out.println("Line process error");
+			message = "Bad Request: Could not understand headers";
 			return 400;
 		}
 	}
@@ -418,8 +430,11 @@ public int authorize_request() 	{
 			case 200: out.println("HTTP/1.1 200 OK"); break;
 			case 302: out.println("HTTP/1.1 302 Found"); outputResponse(302,out); break;
 			case 307: out.println("HTTP/1.1 307 Temporary Redirect"); outputResponse(307,out); break;
-			case 404: out.println("HTTP/1.1 404 Not Found");
-			case 415: out.println("HTTP/1.1 415 Unsupported Media Type");
+			case 400: out.println("HTTP/1.1 400 Bad Request"); outputResponse(400,out); break;
+			case 403: out.println("HTTP/1.1 403 Forbidden"); outputResponse(403,out); break;
+			case 404: out.println("HTTP/1.1 404 Not Found"); outputResponse(404,out); break;
+			case 415: out.println("HTTP/1.1 415 Unsupported Media Type"); outputResponse(415,out); break;
+			case 500: out.println("HTTP/1.1 500 Internal Server Error"); outputResponse(500,out); break;
 			default: out.println("HTTP/1.1 400 Bad Request"); break;
 		}
 		//out.println("Date: " + getDateTime());
@@ -443,7 +458,6 @@ public int authorize_request() 	{
 			out.println("Content-Length: " + message.toCharArray().length);
 			out.println("");
 			out.println(message);
-			System.out.println(message);
 		} else {
 			out.println("Content-Type: text/xml; charset=utf-8");
 			out.println("Content-Length: 0");
