@@ -1,3 +1,4 @@
+import com.eaio.uuid.UUID;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -12,12 +13,17 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 
 class ServiceInterface implements Runnable {
-	private String url_base = "s3.amazonaws.com";
+	private String node_id = "1001";
+	private String node_url = "yomiko.ecs.soton.ac.uk:8452";
+	
+	private String url_base = "storage.p2n.org";
 	private Socket client;
 	private String log_file = "log/status.log_" + getDate();
 	private Hashtable request_ht = new Hashtable();
 	private Hashtable response_ht = new Hashtable();
 	private String message = "";	
+	private String base_path = "data/";
+	private DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
 
 	ServiceInterface(Socket client) {
 		this.client = client;
@@ -62,8 +68,23 @@ class ServiceInterface implements Runnable {
 			} catch (IOException s_error) {	
 				s_error.printStackTrace();
 			}
-		} 
-		http_code = authorize_request();
+		}
+		String type = (String)request_ht.get("type"); 
+		boolean bypass_authorisation = false;
+		if (type.equals("GET") || type.equals("HEAD")) {
+			bypass_authorisation = public_access_allowed();
+		}
+		if (bypass_authorisation) {
+			http_code = 100;
+		} else {
+			String auth_temp_amz = (String)request_ht.get("authorization");
+			if (auth_temp_amz == null) {
+				message = "MissingSecurityHeader: Your request was missing a required header.";
+				http_code = 400;
+			} else {
+				http_code = authorize_request();
+			}
+		}
 		if (http_code > 399) {
 			try {
 				int status = header_message(http_code,out);
@@ -72,21 +93,28 @@ class ServiceInterface implements Runnable {
 				s_error.printStackTrace();
 			}
 		} else {
-			String type = (String)request_ht.get("type"); 
+			int status = 0;
 			if (type.equals("PUT")) {
-				int status = header_message(http_code,out);
-				http_code = read_body(in,log_writer);
+				int clength = Integer.parseInt(request_ht.get("content-length").toString().trim());
+				if (clength == 0) {
+					http_code = handle_bucket_creation(in,log_writer);
+				} else {
+					status = header_message(http_code,out);
+					http_code = put_bitstream(in,log_writer);
+				}
 				status = header_message(http_code,out);
 			} else if (type.equals("GET")) {
 				http_code = get_file(out);
 			} else if (type.equals("HEAD")) {
 				http_code = send_head(out);
 			} else if (type.equals("DELETE")) {
-				if (file_delete()) {
-					http_code = header_message(200,out);
+				String uri = (String)request_ht.get("uri");
+				if (uri.trim().equals("/")) {
+					http_code = handle_bucket_deletion(in,log_writer);
 				} else {
-					http_code = header_message(500,out);
+					http_code = delete_file(in,log_writer);
 				}
+				status = header_message(http_code,out);
 			}
 		}
 		try {
@@ -97,9 +125,26 @@ class ServiceInterface implements Runnable {
 		}
 	}
 	
+	private boolean public_access_allowed() {
+		String requested_path = get_requested_path();
+		String uuid = dbm.get_uuid_from_requested_path(requested_path);
+		return dbm.public_access(uuid);
+	}
+
 	private int send_head(PrintWriter out) {
 		try {
-			File file = new File("data/foo.txt");
+			String requested_path = get_requested_path();
+			String uuid = dbm.get_uuid_from_requested_path(requested_path);
+			if (!dbm.has_local_copy(uuid) || uuid.equals("404")) {
+				message = "File Not Found";
+				return 404;
+			}
+			String actual_path = dbm.get_local_path_from_uuid(uuid);
+			if (actual_path.equals("404")) {
+				message = "File Not Found";
+				return 404;
+			}
+			File file = new File(actual_path);
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: Java");
@@ -107,7 +152,7 @@ class ServiceInterface implements Runnable {
 			out.println("Content-Type: text/html; charset=utf-8");
 			out.println("Content-Length: " + file.length());
 			out.println("Last-Modified: " + file.lastModified());
-			out.println("Content-MD5: " + get_md5());
+			out.println("Content-MD5: " + get_md5(file));
 			out.println("");
 			out.println("");
 		} catch (Exception e) {
@@ -116,11 +161,22 @@ class ServiceInterface implements Runnable {
 		return 200;
 	}
 
-
 	private int get_file(PrintWriter out) {
 		try {
-			File file = new File("data/foo.txt");
-			System.out.println(file.length());
+			String requested_path = get_requested_path();
+			String uuid = dbm.get_uuid_from_requested_path(requested_path);
+			if (!dbm.has_local_copy(uuid) || uuid.equals("404")) {
+				message = "File Not Found";
+				return 404;
+			}
+			String actual_path = dbm.get_local_path_from_uuid(uuid);
+			if (actual_path.equals("404")) {
+				message = "File Not Found";
+				return 404;
+			}
+			File file = new File(actual_path);
+		
+			out.println("HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: Java");
@@ -147,6 +203,27 @@ class ServiceInterface implements Runnable {
 		return 200;
 	}
 
+private String get_requested_path() {
+	String host_part = (String)request_ht.get("host");
+	host_part = host_part.replace(url_base,"");
+	try {
+		if (host_part.indexOf(":") > 0) {
+			host_part = host_part.substring(0,host_part.indexOf(":"));
+		}
+		if (host_part.substring(host_part.length()-1,host_part.length()).equals(".")) {
+			host_part = host_part.substring(0,host_part.length()-1);
+		}
+		if (!host_part.equals("")) {
+			host_part = "/" + host_part;
+		}
+	} catch (Exception e) {
+	}
+	String uri = (String)request_ht.get("uri");
+	if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
+		uri = uri.substring(0,uri.indexOf("?"));
+	}
+	return host_part + uri;
+}
 
 public int authorize_request() 	{
 	String string_to_sign="";
@@ -195,26 +272,8 @@ public int authorize_request() 	{
 			string_to_sign += "x-amz-date:" + (String)amz_values.get("x-amz-date") + "\n";
 		}
 
-		String host_part = (String)request_ht.get("host");
-		host_part = host_part.replace(url_base,"");
-		try {
-		if (host_part.indexOf(":") > 0) {
-			host_part = host_part.substring(0,host_part.indexOf(":"));
-		}
-		if (host_part.substring(host_part.length()-1,host_part.length()).equals(".")) {
-			host_part = host_part.substring(0,host_part.length()-1);
-		}
-		if (!host_part.equals("")) {
-			host_part = "/" + host_part;
-		}
-		} catch (Exception e) {
-		}
-		String uri = (String)request_ht.get("uri");
-		if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
-			uri = uri.substring(0,uri.indexOf("?"));
-		}
-		string_to_sign += host_part + uri;
-		System.out.println(string_to_sign);
+		String requested_path = get_requested_path();
+		string_to_sign += requested_path;
 
 		String aws_access_string = (String)request_ht.get("authorization");
 		String[] parts = aws_access_string.split(" ");
@@ -223,18 +282,19 @@ public int authorize_request() 	{
 		String aws_access_id = parts[0];
 		String aws_signature = parts[1];
 		
-		DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
 		int http_code = dbm.userExists(aws_access_id);
 		if (http_code > 399) {
 			message = "InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records.";
 			return 403;
 		}
+		request_ht.put("access_id",aws_access_id);
 
 		String aws_private_key = dbm.getPrivateKey(aws_access_id);
 		if (aws_private_key.equals("500")) {
 			return 500;
 		}
 		String our_sign = calculateRFC2104HMAC(string_to_sign,aws_private_key);
+		System.out.println("Expecting signature: " + our_sign);
 		if (our_sign.equals(aws_signature)) {
 			return 100;
 		} else {
@@ -246,12 +306,207 @@ public int authorize_request() 	{
 		return 400;
 	}
 }
+	private int check_bucket() {
+		String host_part = (String)request_ht.get("host");
+		String bucket = "";
+		try {
+			bucket = host_part.substring(0,host_part.indexOf(url_base)-1);
+		} catch (Exception e) {
+			message = "InvalidURI: Couldn't parse the specified URI or URI of host not matched to this domain.";
+			return 400;
+		}
+		boolean success = false;
+		try {
+			success = (new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+bucket)).isDirectory();
+		} catch (Exception e) {
+		}
+		if (success == false) {
+			message = "NoSuchBucket: The specified bucket does not exist.";
+			return 404;
+		} else {
+			return 200;
+		}
+	}
 
-	public int read_body(BufferedReader in, BufferedWriter log_writer) {
+	private int handle_bucket_creation(BufferedReader in, BufferedWriter log_writer) {
+		String bucket = get_bucket_name();
+		if (bucket == null) {
+			return 500;
+		}
+		if (check_bucket() == 200) {
+			message = "BucketAlreadyExists: Bucket already exists.";
+			return 409;
+		}
+		Boolean success = false;
+		try { 
+			success = (new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+bucket)).mkdirs();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return 500;
+		}
+		if (success == true) {
+			return 200;
+		} else {
+			message = "Unable to create bucket";
+			return 500;
+		}
+		
+	}
+
+	public int delete_file(BufferedReader in, BufferedWriter log_writer) {
+		int status = check_bucket();
+		if (status != 200) {
+			return status;
+		}
+		String requested_path = get_requested_path();
+		String uuid = dbm.get_uuid_from_requested_path(requested_path);
+		if (uuid.equals("404")) {
+			message = "File Not Found";
+			return 404;
+		}
+		boolean success=true;
+		if (dbm.has_psn_copy(uuid)) {
+			//DO SOME STUFF WITH THE PSN
+			success=true;
+			if (success) {
+				dbm.unset_p2n_copy(uuid);
+			}
+		} 
+		if (success==false) {
+			message = "Error removing file from p2n distribution";
+			return 500;
+		} 
+		if (dbm.has_local_copy(uuid)) {
+			String actual_path = dbm.get_local_path_from_uuid(uuid);
+			File file = new File(actual_path);	
+			try {
+				file.delete();
+			} catch (Exception e) {
+				success=false;
+			}
+			if (success) {
+				dbm.unset_local_copy(uuid);
+			}
+		}
+		if (success) {
+			try {
+				delete_empty_uuid(uuid);
+				success = dbm.delete_uuid(uuid);
+			} catch (Exception e) {
+				success = false;
+			}
+		}
+		if (success) {
+			return 204;
+		} else {
+			message = "Failed to remove records from Database, big error!";
+			return 500;
+		}
+	}
+
+	public void delete_empty_uuid(String uuid) {
+		File store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+		try {
+			store_path.delete();
+		} catch (Exception e) {}
+	 	store_path = new File(base_path+"psn/" + uuid);
+		try {
+			store_path.delete();
+		} catch (Exception e) {}
+	}
+
+	public int put_bitstream(BufferedReader in, BufferedWriter log_writer) {
+		int status = check_bucket();
+		if (status != 200) {
+			return status;
+		}
+		String requested_path = get_requested_path();
+		String access_id = (String)request_ht.get("access_id");
+		String uuid = dbm.get_uuid_from_request(access_id,requested_path);
+		if (uuid.equals("500")) {
+			message = "Failed to fetch indexes.";
+			return 500;
+		}
+		boolean success = false;
+		String uri = (String)request_ht.get("uri");
+		if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
+				uri = uri.substring(0,uri.indexOf("?"));
+		}
+		if (uuid.equals("404")) {
+			uuid = new UUID().toString();
+			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get("x-amz-acl"));
+			if (success == false) {
+				message = "Failed to create file storage reference";
+				return 500;
+			}
+			File store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+			try {
+				success = store_path.mkdir();
+			} catch (Exception e) {
+				message = "Could not create file path";
+				return 500;
+			}
+			if (success == false) {
+				message = "Could not create file path";
+				return 500;
+			}
+
+			store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + get_bucket_name() + "/" + uuid + "/" + uri);
+			int http_code = read_bitstream(in,store_path);
+			if (http_code != 200) {
+				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+				store_path.delete();
+				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+				store_path.delete();
+				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+				try {
+					http_code = dbm.delete_uuid_mapping(uuid,"local",store_path.toString(),node_id);
+				} catch (Exception e) {
+					return 500;
+				}
+				return http_code;
+			} else {
+				//REALLY NEED TO ERROR HANDLE HERE
+				success = dbm.update_file_cache(uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"local",node_id);
+				if (success) {
+					return 200;
+				} else {
+					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+					store_path.delete();
+					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+					store_path.delete();
+					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+					try {
+						http_code = dbm.delete_uuid_mapping(uuid,"local",store_path.toString(),node_id);
+					} catch (Exception e) {
+					}
+					message = "Failed to update final locations of file, aborting";
+					return 500;
+				}
+			}
+		} else {
+			File store_path = store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + get_bucket_name() + "/" + uuid + "/" + uri);
+			if (store_path.exists()) {
+				String in_md5 = (String)request_ht.get("content-md5");
+				String md5_sum = get_md5(store_path); 
+				if (in_md5.equals(md5_sum)) {
+					message = "File already present and up to date.";
+					return 409;
+				}
+			}
+			// Move old, re-verify, store new, verify, delete_old
+			// At any point fail back to using old
+		}
+		return 200;
+	}
+
+	public int read_bitstream(BufferedReader in,File store_path) {
 		BufferedWriter file_writer = null;
 		try{
-			file_writer = new BufferedWriter(new FileWriter("data/foo.txt",false));
+			file_writer = new BufferedWriter(new FileWriter(store_path));
 		} catch (Exception e) {
+			e.printStackTrace();
+			message = "Could not open file for writing";
 			return 500;
 		}
 		int clength = Integer.parseInt(request_ht.get("content-length").toString().trim());
@@ -271,25 +526,81 @@ public int authorize_request() 	{
 		} catch (Exception e) {
 			return 500;
 		}
-		int status = check_md5();
+		int status = check_md5(store_path);
 		if (status == 200) {
 			return 200;
 		} else {
-			boolean success = file_delete();
+			try {
+				boolean success = store_path.delete();
+			} catch (Exception e) {
+			}
 			message = "BadDigest: The Content-MD5 you specified did not match what we received.";
 			return 400;
 		}
 	}
 
-	public boolean file_delete() {
-		return new File("data/foo.txt").delete();
+	private String get_bucket_name() {
+		String host_part = (String)request_ht.get("host");
+		String bucket = "";
+		try {
+			bucket = host_part.substring(0,host_part.indexOf(url_base)-1);
+		} catch (Exception e) {
+			message = "InvalidURI: Couldn't parse the specified URI or URI of host not matched to this domain.";
+			return null;
+		}
+		return bucket;
 	}
 
-	public String get_md5() {
-		String file = "data/foo.txt";
+	private int handle_bucket_deletion(BufferedReader in, BufferedWriter log_writer) {
+		String bucket = get_bucket_name();
+		if (bucket == null) {
+			return 500;
+		}
+		File dir_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+bucket);
+		boolean success = false;
+		try {
+			success = dir_path.isDirectory();
+		} catch (Exception e) {
+		}
+		if (success == false) {
+			message = "InvalidBucketName: The specified bucket is not valid.";
+			return 400;
+		}
+
+		File[] files;
+		try { 
+			files = dir_path.listFiles();
+		} catch (Exception e) {
+			e.printStackTrace();
+			message = "Could not get listing of bucket contents";
+			return 500;
+		}
+	
+		if (files.length > 0) {
+			message = "BucketNotEmpty: The bucket you tried to delete is not empty.";
+			return 409;
+		} 
+		
+		try {	
+			success = dir_path.delete();
+		} catch (Exception e) {
+			e.printStackTrace();
+			message = "Could not delete Bucket";
+			return 500;
+		}
+		if (success) {
+			return 204;
+		} else {
+			message = "Could not delete bucket, even though it seems empty.";
+			return 500;
+		}
+		
+	}
+
+	public String get_md5(File path) {
 		try {
 			MessageDigest digest = MessageDigest.getInstance("MD5");
-			File f = new File(file);
+			File f = path;
 			InputStream is = new FileInputStream(f);				
 			byte[] buffer = new byte[8192];
 			int read = 0;
@@ -306,8 +617,8 @@ public int authorize_request() 	{
 		return "";
 	}
 
-	public int check_md5() {
-		String output = get_md5();
+	public int check_md5(File path) {
+		String output = get_md5(path);
 		if (output.equals((String)request_ht.get("content-md5"))) {
 			return 200;
 		} else {
@@ -428,11 +739,13 @@ public int authorize_request() 	{
 		switch (http_code) {
 			case 100: out.println("HTTP/1.1 100 Continue"); outputResponse(100,out); break;
 			case 200: out.println("HTTP/1.1 200 OK"); break;
+			case 204: out.println("HTTP/1.1 204 No Content"); outputResponse(204,out); break;
 			case 302: out.println("HTTP/1.1 302 Found"); outputResponse(302,out); break;
 			case 307: out.println("HTTP/1.1 307 Temporary Redirect"); outputResponse(307,out); break;
 			case 400: out.println("HTTP/1.1 400 Bad Request"); outputResponse(400,out); break;
 			case 403: out.println("HTTP/1.1 403 Forbidden"); outputResponse(403,out); break;
 			case 404: out.println("HTTP/1.1 404 Not Found"); outputResponse(404,out); break;
+			case 409: out.println("HTTP/1.1 409 Conflict"); outputResponse(409,out); break;
 			case 415: out.println("HTTP/1.1 415 Unsupported Media Type"); outputResponse(415,out); break;
 			case 500: out.println("HTTP/1.1 500 Internal Server Error"); outputResponse(500,out); break;
 			default: out.println("HTTP/1.1 400 Bad Request"); break;
@@ -459,7 +772,6 @@ public int authorize_request() 	{
 			out.println("");
 			out.println(message);
 		} else {
-			out.println("Content-Type: text/xml; charset=utf-8");
 			out.println("Content-Length: 0");
 		}
 	}
@@ -509,7 +821,7 @@ class SocketThrdServer {
 	}
 
 	public static void main(String[] args){
-		int port = 4444;
+		int port = 8452;
 		try {
 			if (args[0].equals("--help")) {
 				System.out.println("Service Interface Listener (v0.1nea)");
