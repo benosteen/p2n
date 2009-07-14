@@ -36,9 +36,13 @@ class ServiceInterface implements Runnable {
 	}
 
 	private String getDateTime() {
-		DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss");
-		Date date = new Date();
-		return dateFormat.format(date) + " GMT";
+		SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
+		format.setCalendar(Calendar.getInstance(new SimpleTimeZone(0, "GMT")));
+		return format.format(new Date());
+		
+		//DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss");
+		//Date date = new Date();
+		//return dateFormat.format(date) + " GMT";
 	}
 
 	public void run(){
@@ -65,7 +69,6 @@ class ServiceInterface implements Runnable {
 	}
 	
 	private boolean process_single_request(BufferedReader in, PrintWriter out, BufferedWriter log_writer) {
-		System.out.println("PROCESSING REQUEST");
 		String line = "";
 		request_ht = new Hashtable();
 		response_ht = new Hashtable();
@@ -134,6 +137,9 @@ class ServiceInterface implements Runnable {
 				http_code = send_head(out);
 			} else if (type.equals("DELETE")) {
 				String uri = (String)request_ht.get("uri");
+				if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
+					uri = uri.substring(0,uri.indexOf("?"));
+				}
 				if (uri.trim().equals("/")) {
 					http_code = handle_bucket_deletion(in,log_writer);
 				} else {
@@ -143,7 +149,6 @@ class ServiceInterface implements Runnable {
 			}
 		}
 		try {
-			System.out.println("Connection Closed 4");
 			client.close();	
 			log_writer.close();
 			return false;
@@ -231,7 +236,6 @@ class ServiceInterface implements Runnable {
 				try {
 					char current = (char)in.read();
 					out.print(current);
-					System.out.print(current);
 					ccount++;
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -277,21 +281,17 @@ public int authorize_request() 	{
 		if (key.length() > 4) {
 			String lkey = key.toLowerCase();
 			if (lkey.substring(0,5).equals("x-amz")) {
-				System.out.println("Key: "+lkey);
 				amz_keys.add(lkey);
 				amz_values.put(lkey,(String)request_ht.get(key));
 			}
 		}
 	}
 	Collections.sort(amz_keys);
-	//for(int i=0; i<amz_keys.size(); i++) {
-	//	System.out.println((String)amz_keys.get(i));
-	//}
 
 	try {
 		String type = (String)request_ht.get("type");
 		string_to_sign += type + "\n";
-		if (type.equals("GET")) {
+		if (type.equals("GET") || type.equals("HEAD")) {
 			string_to_sign += "\n\n";
 			string_to_sign += (String)request_ht.get("date") + "\n";
 		} else if (type.equals("PUT")) {
@@ -313,8 +313,12 @@ public int authorize_request() 	{
 		} else if (type.equals("DELETE")) {
 			string_to_sign += "\n";
 			string_to_sign += "\n";
-			string_to_sign += "\n";
-			string_to_sign += "x-amz-date:" + (String)amz_values.get("x-amz-date") + "\n";
+			if ((String)amz_values.get("x-amz-date") == null) {
+				string_to_sign += (String)request_ht.get("date") + "\n";
+			} else {
+				string_to_sign += "\n";
+				string_to_sign += "x-amz-date:" + (String)amz_values.get("x-amz-date") + "\n";
+			}
 		}
 
 		String requested_path = get_requested_path();
@@ -338,11 +342,7 @@ public int authorize_request() 	{
 		if (aws_private_key.equals("500")) {
 			return 500;
 		}
-		System.out.println();
-		System.out.println(string_to_sign);
-		System.out.println();
 		String our_sign = calculateRFC2104HMAC(string_to_sign,aws_private_key);
-		System.out.println("Expecting signature: " + our_sign);
 		if (our_sign.equals(aws_signature)) {
 			return 100;
 		} else {
@@ -558,6 +558,7 @@ public int authorize_request() 	{
 			return 500;
 		}
 		int clength = Integer.parseInt(request_ht.get("content-length").toString().trim());
+		System.out.println("GOT LENGTH: " + clength);
 		int ccount = 0;
 		String body = "";
 		while (ccount<clength) {
@@ -599,7 +600,7 @@ public int authorize_request() 	{
 		return bucket;
 	}
 
-	private int handle_bucket_deletion(BufferedReader in, BufferedWriter log_writer) {
+	private int  handle_bucket_deletion(BufferedReader in, BufferedWriter log_writer) {
 		String bucket = get_bucket_name();
 		if (bucket == null) {
 			return 500;
@@ -683,10 +684,6 @@ public int authorize_request() 	{
 		int chars = 0;
 		try {
 			line = in.readLine();
-			//while (line == null) {
-			//	System.out.print("null | ");
-			//	line = in.readLine();
-			//}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -703,9 +700,9 @@ public int authorize_request() 	{
 			} catch (IOException ex) {
 			}
 		}
-		System.out.println("Line: " + line);
 		while(!line.equals("")){
 			try{
+				System.out.println("Request Line: " + line);
 				input_lines.add(line);
 				log_writer.write(line); log_writer.newLine();
 				line = in.readLine();
@@ -729,7 +726,6 @@ public int authorize_request() 	{
 
 	private int process_input(Vector input_lines) {
 		String line = (String)input_lines.get(0);
-		System.out.println(line);
 		String[] request = line.split(" ");
 		if (request[0].equalsIgnoreCase("HEAD") || request[0].equalsIgnoreCase("GET") || request[0].equalsIgnoreCase("POST") || request[0].equalsIgnoreCase("PUT") || request[0].equalsIgnoreCase("DELETE") || request[0].equalsIgnoreCase("TRACE") || request[0].equalsIgnoreCase("OPTIONS") || request[0].equalsIgnoreCase("CONNECT")) {
 			request_ht.put("type",request[0]);
@@ -776,7 +772,6 @@ public int authorize_request() 	{
 				} else {
 					to_put = request[1].trim();
 				}
-				System.out.println ("Putting @ "  + req_key + " : " + to_put);
 				request_ht.put(req_key,to_put);
 			}
 			return 200;
