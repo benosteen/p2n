@@ -36,35 +36,50 @@ class ServiceInterface implements Runnable {
 	}
 
 	private String getDateTime() {
-		DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+		DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss");
 		Date date = new Date();
-		return dateFormat.format(date);
+		return dateFormat.format(date) + " GMT";
 	}
 
 	public void run(){
-		String line = "";
 		BufferedReader in = null;
 		PrintWriter out = null;
 		BufferedWriter log_writer = null;
 		try{
+			client.setKeepAlive(true);
 			log_writer = new BufferedWriter(new FileWriter(log_file,true));
 			in = new BufferedReader(new InputStreamReader(client.getInputStream()));
 			out = new PrintWriter(client.getOutputStream(), true);
 		} catch (IOException e) {
 			try {
+				System.out.println("Connection Closed 0");
 				log_writer.write("Failed to establish input and output streams."); log_writer.newLine();
 				client.close();
 			} catch (IOException ex) {
 			}
 		}
+		boolean processor = true;
+		while (processor) {
+			processor = process_single_request(in,out,log_writer);
+		}
+	}
+	
+	private boolean process_single_request(BufferedReader in, PrintWriter out, BufferedWriter log_writer) {
+		System.out.println("PROCESSING REQUEST");
+		String line = "";
+		request_ht = new Hashtable();
+		response_ht = new Hashtable();
+		Vector input_lines = new Vector();
+		
 		request_ht.put("content-length",0);
-		Vector input_lines = read_lines(in,log_writer);
+		input_lines = read_lines(in,log_writer);
 		int http_code = process_input(input_lines);
 		String string_to_sign = "";
 		if (http_code > 399) {
 			try {
 				int status = header_message(http_code,out);
 				client.close();	
+				return false;
 			} catch (IOException s_error) {	
 				s_error.printStackTrace();
 			}
@@ -72,7 +87,16 @@ class ServiceInterface implements Runnable {
 		String type = (String)request_ht.get("type"); 
 		boolean bypass_authorisation = false;
 		if (type.equals("GET") || type.equals("HEAD")) {
-			bypass_authorisation = public_access_allowed();
+			String bucket = get_bucket_name();
+			if (bucket == null) {
+				String requested_path = (String)request_ht.get("uri");
+				if (requested_path.equals("/connection/test")) {
+					output_connection_test_success(out);
+					return true;
+				}
+			} else {
+				bypass_authorisation = public_access_allowed();
+			}
 		}
 		if (bypass_authorisation) {
 			http_code = 100;
@@ -89,6 +113,7 @@ class ServiceInterface implements Runnable {
 			try {
 				int status = header_message(http_code,out);
 				client.close();	
+				return false;
 			} catch (IOException s_error) {	
 				s_error.printStackTrace();
 			}
@@ -118,17 +143,32 @@ class ServiceInterface implements Runnable {
 			}
 		}
 		try {
+			System.out.println("Connection Closed 4");
 			client.close();	
 			log_writer.close();
+			return false;
 		} catch (IOException s_error) {	
 			s_error.printStackTrace();
 		}
+		return true;
 	}
 	
 	private boolean public_access_allowed() {
 		String requested_path = get_requested_path();
 		String uuid = dbm.get_uuid_from_requested_path(requested_path);
 		return dbm.public_access(uuid);
+	}
+
+	private void output_connection_test_success(PrintWriter out) {
+		out.println("HTTP/1.1 200 OK");
+		out.println("Date: " + getDateTime());
+		out.println("Server: Service Controller");
+		out.println("X-Powered-By: Java");
+		out.println("Connection: close");
+		out.println("Content-Type: text/plain; charset=utf-8");
+		out.println("Content-Length: 25");
+		out.println("");
+		out.println("aws sanity check succeeded!");
 	}
 
 	private int send_head(PrintWriter out) {
@@ -145,6 +185,7 @@ class ServiceInterface implements Runnable {
 				return 404;
 			}
 			File file = new File(actual_path);
+			out.println("HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: Java");
@@ -259,7 +300,11 @@ public int authorize_request() 	{
 			} else {
 				string_to_sign += "\n";
 			}
-			string_to_sign += (String)request_ht.get("content-type") + "\n";
+			if (request_ht.containsKey("content-type")) {
+				string_to_sign += (String)request_ht.get("content-type") + "\n";
+			} else {
+				string_to_sign += "\n";
+			}
 			string_to_sign += (String)request_ht.get("date") + "\n";
 			for(int i=0; i<amz_keys.size(); i++) {
 				String local_key = ((String)amz_keys.get(i));
@@ -284,7 +329,7 @@ public int authorize_request() 	{
 		
 		int http_code = dbm.userExists(aws_access_id);
 		if (http_code > 399) {
-			message = "InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records.";
+			message = "InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records. (" + aws_access_id + ")";
 			return 403;
 		}
 		request_ht.put("access_id",aws_access_id);
@@ -293,6 +338,9 @@ public int authorize_request() 	{
 		if (aws_private_key.equals("500")) {
 			return 500;
 		}
+		System.out.println();
+		System.out.println(string_to_sign);
+		System.out.println();
 		String our_sign = calculateRFC2104HMAC(string_to_sign,aws_private_key);
 		System.out.println("Expecting signature: " + our_sign);
 		if (our_sign.equals(aws_signature)) {
@@ -619,6 +667,9 @@ public int authorize_request() 	{
 
 	public int check_md5(File path) {
 		String output = get_md5(path);
+		if ((String)request_ht.get("content-md5") == null) {
+			return 200;
+		}
 		if (output.equals((String)request_ht.get("content-md5"))) {
 			return 200;
 		} else {
@@ -631,10 +682,22 @@ public int authorize_request() 	{
 		Vector input_lines = new Vector();
 		int chars = 0;
 		try {
+			line = in.readLine();
+			//while (line == null) {
+			//	System.out.print("null | ");
+			//	line = in.readLine();
+			//}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		try {
 			log_writer.write("Processing Request from " + client.getInetAddress().toString() + " (" + getDateTime() + ")"); log_writer.newLine();
-			line = in.readLine().trim();
+			line = line.trim();
 		} catch (IOException e) {
+			System.out.println("FAILED");
+			e.printStackTrace();
 			try {
+				System.out.println("Connection Closed 1");
 				log_writer.write("Read from " + client.getInetAddress().toString() +" at " + getDateTime() + " failed"); log_writer.newLine();
 				client.close();
 			} catch (IOException ex) {
@@ -648,12 +711,19 @@ public int authorize_request() 	{
 				line = in.readLine();
 			} catch (IOException e) {
 				try {
+					System.out.println("Connection Closed 2");
 					log_writer.write("Read from " + client.getInetAddress().toString() +" at " + getDateTime() + " failed"); log_writer.newLine();
 					client.close();
+					System.exit(0);
 				} catch (IOException ex) {
 				}
 			}
 		}
+		//try {
+		//	in.close();	
+		//} catch (Exception e) {
+		//	e.printStackTrace();
+		//}
 		return input_lines;
 	}
 
@@ -663,7 +733,30 @@ public int authorize_request() 	{
 		String[] request = line.split(" ");
 		if (request[0].equalsIgnoreCase("HEAD") || request[0].equalsIgnoreCase("GET") || request[0].equalsIgnoreCase("POST") || request[0].equalsIgnoreCase("PUT") || request[0].equalsIgnoreCase("DELETE") || request[0].equalsIgnoreCase("TRACE") || request[0].equalsIgnoreCase("OPTIONS") || request[0].equalsIgnoreCase("CONNECT")) {
 			request_ht.put("type",request[0]);
-			request_ht.put("uri",request[1]);
+			String uri = request[1];
+			if (uri.indexOf("?") > 0) {
+				String uri_params = uri.substring(uri.indexOf("?")+1,uri.length());
+				String[] uri_params_bits = uri_params.split("&");
+				String aws_access_id = "";
+				String aws_signature = "";
+				String expires = "";
+				for (int i=0; i<uri_params_bits.length; i++) {
+					String[] sides = uri_params_bits[i].split("=");
+					if (sides[0].equals("AWSAccessKeyId")) {
+						aws_access_id = sides[1];
+					}
+					if (sides[0].equals("Signature")) {
+						aws_signature = new URLDecoder().decode(sides[1]);
+					}
+					if (sides[0].equals("Expires")) {
+						expires = sides[1];
+					}
+				}
+				request_ht.put("authorization","AWS " + aws_access_id + ":" + aws_signature);
+				request_ht.put("date",expires);
+
+			}
+			request_ht.put("uri",uri);
 			request_ht.put("protocal",request[2]);
 			Enumeration e = input_lines.elements();
 			e.nextElement();
