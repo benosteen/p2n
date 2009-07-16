@@ -46,14 +46,16 @@ class ServiceInterface implements Runnable {
 	}
 
 	public void run(){
-		BufferedReader in = null;
-		PrintWriter out = null;
+		InputStream in = null;
+		OutputStream out = null;
 		BufferedWriter log_writer = null;
 		try{
 			client.setKeepAlive(true);
 			log_writer = new BufferedWriter(new FileWriter(log_file,true));
-			in = new BufferedReader(new InputStreamReader(client.getInputStream()));
-			out = new PrintWriter(client.getOutputStream(), true);
+			in = client.getInputStream();
+			out = client.getOutputStream();
+			//in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+			//out = new PrintWriter(client.getOutputStream(), true);
 		} catch (IOException e) {
 			try {
 				System.out.println("Connection Closed 0");
@@ -68,7 +70,7 @@ class ServiceInterface implements Runnable {
 		}
 	}
 	
-	private boolean process_single_request(BufferedReader in, PrintWriter out, BufferedWriter log_writer) {
+	private boolean process_single_request(InputStream in, OutputStream out, BufferedWriter log_writer) {
 		String line = "";
 		request_ht = new Hashtable();
 		response_ht = new Hashtable();
@@ -125,7 +127,7 @@ class ServiceInterface implements Runnable {
 			if (type.equals("PUT")) {
 				int clength = Integer.parseInt(request_ht.get("content-length").toString().trim());
 				if (clength == 0) {
-					http_code = handle_bucket_creation(in,log_writer);
+					http_code = handle_bucket_creation(log_writer);
 				} else {
 					status = header_message(http_code,out);
 					http_code = put_bitstream(in,log_writer);
@@ -141,9 +143,9 @@ class ServiceInterface implements Runnable {
 					uri = uri.substring(0,uri.indexOf("?"));
 				}
 				if (uri.trim().equals("/")) {
-					http_code = handle_bucket_deletion(in,log_writer);
+					http_code = handle_bucket_deletion(log_writer);
 				} else {
-					http_code = delete_file(in,log_writer);
+					http_code = delete_file(log_writer);
 				}
 				status = header_message(http_code,out);
 			}
@@ -164,7 +166,8 @@ class ServiceInterface implements Runnable {
 		return dbm.public_access(uuid);
 	}
 
-	private void output_connection_test_success(PrintWriter out) {
+	private void output_connection_test_success(OutputStream ops) {
+		PrintStream out = new PrintStream(ops);
 		out.println("HTTP/1.1 200 OK");
 		out.println("Date: " + getDateTime());
 		out.println("Server: Service Controller");
@@ -176,7 +179,8 @@ class ServiceInterface implements Runnable {
 		out.println("aws sanity check succeeded!");
 	}
 
-	private int send_head(PrintWriter out) {
+	private int send_head(OutputStream ops) {
+		PrintStream out = new PrintStream(ops);
 		try {
 			String requested_path = get_requested_path();
 			String uuid = dbm.get_uuid_from_requested_path(requested_path);
@@ -195,7 +199,8 @@ class ServiceInterface implements Runnable {
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: Java");
 			out.println("Connection: close");
-			out.println("Content-Type: text/html; charset=utf-8");
+			String content_type = dbm.get_content_type(uuid,"local");
+			out.println("Content-Type: " + content_type);
 			out.println("Content-Length: " + file.length());
 			out.println("Last-Modified: " + file.lastModified());
 			out.println("Content-MD5: " + get_md5(file));
@@ -207,7 +212,7 @@ class ServiceInterface implements Runnable {
 		return 200;
 	}
 
-	private int get_file(PrintWriter out) {
+	private int get_file(OutputStream ops) {
 		try {
 			String requested_path = get_requested_path();
 			String uuid = dbm.get_uuid_from_requested_path(requested_path);
@@ -221,26 +226,32 @@ class ServiceInterface implements Runnable {
 				return 404;
 			}
 			File file = new File(actual_path);
-		
+			PrintStream out = new PrintStream(new BufferedOutputStream(ops));
 			out.println("HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: Java");
 			out.println("Connection: close");
-			out.println("Content-Type: text/html; charset=utf-8");
+			String content_type = dbm.get_content_type(uuid,"local");
+			out.println("Content-Type: " + content_type);
 			out.println("Content-Length: " + file.length());
 			out.println("");
 			int ccount=0;
-			FileInputStream in = new FileInputStream(file);
+			
+			DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
+			//DataOutputStream out2 = new DataOutputStream(new BufferedOutputStream(ops));
+			DataOutputStream out2 = new DataOutputStream(ops);
 			while (ccount<file.length()) {
 				try {
-					char current = (char)in.read();
-					out.print(current);
+					byte current = (byte)in.read();
+					out2.write(current);
 					ccount++;
 				} catch (IOException e) {
 					e.printStackTrace();
+					break;
 				}
 			}
+			out = new PrintStream(new BufferedOutputStream(ops));
 			out.println("");
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -376,7 +387,7 @@ public int authorize_request() 	{
 		}
 	}
 
-	private int handle_bucket_creation(BufferedReader in, BufferedWriter log_writer) {
+	private int handle_bucket_creation(BufferedWriter log_writer) {
 		String bucket = get_bucket_name();
 		if (bucket == null) {
 			return 500;
@@ -401,7 +412,7 @@ public int authorize_request() 	{
 		
 	}
 
-	public int delete_file(BufferedReader in, BufferedWriter log_writer) {
+	public int delete_file(BufferedWriter log_writer) {
 		int status = check_bucket();
 		if (status != 200) {
 			return status;
@@ -463,7 +474,7 @@ public int authorize_request() 	{
 		} catch (Exception e) {}
 	}
 
-	public int put_bitstream(BufferedReader in, BufferedWriter log_writer) {
+	public int put_bitstream(InputStream in, BufferedWriter log_writer) {
 		int status = check_bucket();
 		if (status != 200) {
 			return status;
@@ -548,10 +559,11 @@ public int authorize_request() 	{
 		return 200;
 	}
 
-	public int read_bitstream(BufferedReader in,File store_path) {
-		BufferedWriter file_writer = null;
+	public int read_bitstream(InputStream ins,File store_path) {
+		DataInputStream in = new DataInputStream(new BufferedInputStream(ins));
+		FileOutputStream file_writer = null;
 		try{
-			file_writer = new BufferedWriter(new FileWriter(store_path));
+			file_writer = new FileOutputStream(store_path);
 		} catch (Exception e) {
 			e.printStackTrace();
 			message = "Could not open file for writing";
@@ -563,7 +575,7 @@ public int authorize_request() 	{
 		String body = "";
 		while (ccount<clength) {
 			try {
-				char current = (char)in.read();
+				byte current = (byte)in.readByte();
 				file_writer.write(current);
 				ccount++;
 			} catch (IOException e) {
@@ -600,7 +612,7 @@ public int authorize_request() 	{
 		return bucket;
 	}
 
-	private int  handle_bucket_deletion(BufferedReader in, BufferedWriter log_writer) {
+	private int  handle_bucket_deletion(BufferedWriter log_writer) {
 		String bucket = get_bucket_name();
 		if (bucket == null) {
 			return 500;
@@ -678,7 +690,9 @@ public int authorize_request() 	{
 		}
 	}
 		
-	public Vector read_lines(BufferedReader in, BufferedWriter log_writer) {
+	public Vector read_lines(InputStream ins, BufferedWriter log_writer) {
+		BufferedReader in = new BufferedReader(new InputStreamReader(ins));
+		
 		String line = "foo";
 		Vector input_lines = new Vector();
 		int chars = 0;
@@ -823,7 +837,8 @@ public int authorize_request() 	{
 
 
 
-	private int header_message(int http_code, PrintWriter out) {
+	private int header_message(int http_code, OutputStream ops) {
+		PrintStream out = new PrintStream(ops);
 		switch (http_code) {
 			case 100: out.println("HTTP/1.1 100 Continue"); outputResponse(100,out); break;
 			case 200: out.println("HTTP/1.1 200 OK"); break;
@@ -846,7 +861,8 @@ public int authorize_request() 	{
 		out.println("");
 		return http_code;
 	}
-	private void outputResponse(int http_code,PrintWriter out) {
+	private void outputResponse(int http_code,PrintStream out) {
+		
 		out.println("Date: " + getDateTime());
 		out.println("Server: Service Controller");
 		out.println("X-Powered-By: Java");

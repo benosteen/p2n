@@ -176,6 +176,24 @@ public class DatabaseConnector_Mysql {
 		} 
 	}
 
+	public String get_content_type(String uuid,String type) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT mime_type from files where mapping_uuid=? and type=?;");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,type);
+			ResultSet rs = pstmt.executeQuery();
+			rs.first();
+			String content_type = rs.getString("mime_type");
+			disconnectMysql(con);
+			return content_type;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "";
+		} 
+
+	}
+
 	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id) {
 		try {
 			Connection con = connectMysql();
