@@ -100,7 +100,26 @@ class ServiceInterface implements Runnable {
 					return true;
 				}
 			} else {
-				bypass_authorisation = public_access_allowed();
+				if (file_exists()) {
+					if (public_access_allowed()) {
+						bypass_authorisation = true;
+					} else {
+						message = "File not found";
+						http_code = 404;
+					}
+				} else {
+					message = "File not found";
+					http_code = 404;
+				}
+			}
+		}
+		if (http_code > 399) {
+			try {
+				int status = header_message(http_code,out);
+				client.close();	
+				return false;
+			} catch (IOException s_error) {	
+				s_error.printStackTrace();
 			}
 		}
 		if (bypass_authorisation) {
@@ -164,6 +183,16 @@ class ServiceInterface implements Runnable {
 		String requested_path = get_requested_path();
 		String uuid = dbm.get_uuid_from_requested_path(requested_path);
 		return dbm.public_access(uuid);
+	}
+
+	private boolean file_exists() {
+		String requested_path = get_requested_path();
+		String uuid = dbm.get_uuid_from_requested_path(requested_path);
+		if (uuid.equals("404")) {
+			return false;
+		} else {
+			return true;
+		}
 	}
 
 	private void output_connection_test_success(OutputStream ops) {
@@ -241,14 +270,26 @@ class ServiceInterface implements Runnable {
 			DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
 			//DataOutputStream out2 = new DataOutputStream(new BufferedOutputStream(ops));
 			DataOutputStream out2 = new DataOutputStream(ops);
-			while (ccount<file.length()) {
+			int fl = ((Long)file.length()).intValue();
+			int read_size = 128 * 1024 * 1024; 
+			while (fl > (read_size)){
 				try {
-					byte current = (byte)in.read();
-					out2.write(current);
-					ccount++;
-				} catch (IOException e) {
+					byte[] b = new byte[read_size];
+					in.readFully(b);
+					out.write(b);
+					fl = fl - read_size;
+				} catch (Exception e) {
 					e.printStackTrace();
 					break;
+				}
+			} 
+			if (fl > 0) {
+				try {
+					byte[] b = new byte[fl];
+					in.readFully(b);
+					out.write(b);
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
 			}
 			out = new PrintStream(new BufferedOutputStream(ops));
@@ -357,6 +398,7 @@ public int authorize_request() 	{
 		if (our_sign.equals(aws_signature)) {
 			return 100;
 		} else {
+			System.out.println("Yours : " + aws_signature + " OURS " + our_sign + "\n" + string_to_sign);
 			message = "SignatureDoesNotMatch: The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method. For more information, see Authenticating REST Requests and Authenticating SOAP Requests for details.";
 			return 403;
 		} 
@@ -573,12 +615,25 @@ public int authorize_request() 	{
 		System.out.println("GOT LENGTH: " + clength);
 		int ccount = 0;
 		String body = "";
-		while (ccount<clength) {
+		int fl = clength;
+		int read_size = 10 * 1024 * 1024; 
+		while (fl > (read_size)){
 			try {
-				byte current = (byte)in.readByte();
-				file_writer.write(current);
-				ccount++;
-			} catch (IOException e) {
+				byte[] b = new byte[read_size];
+				in.readFully(b);
+				file_writer.write(b);
+				fl = fl - read_size;
+			} catch (Exception e) {
+				e.printStackTrace();
+				break;
+			}
+		}
+		if (fl > 0) {
+			try {
+				byte[] b = new byte[fl];
+				in.readFully(b);
+				file_writer.write(b);
+			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
