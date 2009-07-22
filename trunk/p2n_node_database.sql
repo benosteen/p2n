@@ -1,0 +1,111 @@
+-- MySQL dump 10.11
+--
+-- Host: localhost    Database: dct05r_p2n_node1
+-- ------------------------------------------------------
+-- Server version	5.0.45
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `Users`
+--
+
+DROP TABLE IF EXISTS `Users`;
+CREATE TABLE `Users` (
+  `access_id` varchar(255) default NULL,
+  `private_key` varchar(255) default NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `files`
+--
+
+DROP TABLE IF EXISTS `files`;
+CREATE TABLE `files` (
+  `mapping_uuid` varchar(255) default NULL,
+  `path` blob,
+  `md5_sum` varchar(255) default NULL,
+  `type` varchar(255) default NULL,
+  `mime_type` varchar(255) default NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `mappings`
+--
+
+DROP TABLE IF EXISTS `mappings`;
+CREATE TABLE `mappings` (
+  `access_id` varchar(255) default NULL,
+  `requested_path` varchar(255) default NULL,
+  `uuid` varchar(255) NOT NULL default '',
+  `local_copy` int(1) default NULL,
+  `psn_copy` int(1) default NULL,
+  `psn_distribution` int(11) default NULL,
+  `psn_resiliance` int(11) default NULL,
+  `acl` varchar(255) default NULL,
+  PRIMARY KEY  (`uuid`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `node_files`
+--
+
+DROP TABLE IF EXISTS `node_files`;
+CREATE TABLE `node_files` (
+  `node_id` varchar(255) default NULL,
+  `mapping_uuid` varchar(255) default NULL,
+  `type` varchar(255) default NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `nodes`
+--
+
+DROP TABLE IF EXISTS `nodes`;
+CREATE TABLE `nodes` (
+  `id` varchar(255) NOT NULL,
+  `url` blob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `object_metadata`
+--
+
+DROP TABLE IF EXISTS `object_metadata`;
+CREATE TABLE `object_metadata` (
+  `mapping_uuid` varchar(255) default NULL,
+  `word` varchar(255) default NULL,
+  `value` varchar(255) default NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `scanning_log`
+--
+
+DROP TABLE IF EXISTS `scanning_log`;
+CREATE TABLE `scanning_log` (
+  `mapping_uuid` varchar(255) default NULL,
+  `node_id` varchar(255) default NULL,
+  `message_type` varchar(255) default NULL,
+  `message` blob
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2009-07-22 16:09:21
