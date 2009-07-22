@@ -9,10 +9,12 @@ X-Amz-Meta-ReviewedBy: joe@johnsmith.net
 X-Amz-Meta-ReviewedBy: jane@johnsmith.net
 X-Amz-Meta-FileChecksum: 0x02661779
 X-Amz-Meta-ChecksumAlgorithm: crc32
+X-Amz-Meta-PSNDistribution: 3
+X-Amz-Meta-PSNResiliance: 1
 Content-Disposition: attachment; filename=database.dat
 Content-Encoding: gzip
 Content-Length: 5
-Authorization: AWS 0PN5J17HBGZHT7JJ3X82:1+MY2/GeLZhJzKM05G0FOzdyroA=
+Authorization: AWS 0PN5J17HBGZHT7JJ3X82:SR8CoQHF65bghG6FC0dgzdJXIpw=
 
 HTTP/1.1 100 Continue
 Date: Thu, 25 Jun 2009 15:34:24 BST

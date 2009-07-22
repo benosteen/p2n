@@ -17,6 +17,7 @@ class ServiceInterface implements Runnable {
 	private String node_url = "yomiko.ecs.soton.ac.uk:8452";
 	
 	private String url_base = "storage.p2n.org";
+	private String namespace_prefix = "x-amz";
 	private Socket client;
 	private String log_file = "log/status.log_" + getDate();
 	private Hashtable request_ht = new Hashtable();
@@ -221,24 +222,36 @@ class ServiceInterface implements Runnable {
 			if (actual_path.equals("404")) {
 				message = "File Not Found";
 				return 404;
-			}
+			} 
+			output_object_headers(out,uuid);
+			out.println("");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return 200;
+	}
+
+	private void output_object_headers(PrintStream out, String uuid) throws Exception {
+			String actual_path = dbm.get_local_path_from_uuid(uuid);
 			File file = new File(actual_path);
 			out.println("HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
-			out.println("X-Powered-By: Java");
+			out.println("X-Powered-By: PSN Node Control");
+			Hashtable metadata = dbm.get_object_metadata(uuid);
+			Enumeration keys = metadata.keys();
+			while ( keys.hasMoreElements() ) {
+				String key = (String)keys.nextElement();
+				String value = (String)metadata.get(key);
+				out.println(namespace_prefix + "-meta-" + key + ": " + value);
+			}
 			out.println("Connection: close");
 			String content_type = dbm.get_content_type(uuid,"local");
 			out.println("Content-Type: " + content_type);
 			out.println("Content-Length: " + file.length());
 			out.println("Last-Modified: " + file.lastModified());
 			out.println("Content-MD5: " + get_md5(file));
-			out.println("");
-			out.println("");
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return 200;
+			out.println("");	
 	}
 
 	private int get_file(OutputStream ops) {
@@ -256,15 +269,7 @@ class ServiceInterface implements Runnable {
 			}
 			File file = new File(actual_path);
 			PrintStream out = new PrintStream(new BufferedOutputStream(ops));
-			out.println("HTTP/1.1 200 OK");
-			out.println("Date: " + getDateTime());
-			out.println("Server: Service Controller");
-			out.println("X-Powered-By: Java");
-			out.println("Connection: close");
-			String content_type = dbm.get_content_type(uuid,"local");
-			out.println("Content-Type: " + content_type);
-			out.println("Content-Length: " + file.length());
-			out.println("");
+			output_object_headers(out,uuid);
 			int ccount=0;
 			
 			DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
@@ -332,7 +337,7 @@ public int authorize_request() 	{
 		String key = (String)keys.nextElement();
 		if (key.length() > 4) {
 			String lkey = key.toLowerCase();
-			if (lkey.substring(0,5).equals("x-amz")) {
+			if (lkey.substring(0,namespace_prefix.length()).equals(namespace_prefix)) {
 				amz_keys.add(lkey);
 				amz_values.put(lkey,(String)request_ht.get(key));
 			}
@@ -365,11 +370,11 @@ public int authorize_request() 	{
 		} else if (type.equals("DELETE")) {
 			string_to_sign += "\n";
 			string_to_sign += "\n";
-			if ((String)amz_values.get("x-amz-date") == null) {
+			if ((String)amz_values.get(namespace_prefix + "-date") == null) {
 				string_to_sign += (String)request_ht.get("date") + "\n";
 			} else {
 				string_to_sign += "\n";
-				string_to_sign += "x-amz-date:" + (String)amz_values.get("x-amz-date") + "\n";
+				string_to_sign += namespace_prefix + "-date:" + (String)amz_values.get(namespace_prefix + "-date") + "\n";
 			}
 		}
 
@@ -535,7 +540,7 @@ public int authorize_request() 	{
 		}
 		if (uuid.equals("404")) {
 			uuid = new UUID().toString();
-			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get("x-amz-acl"));
+			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get(namespace_prefix + "-acl"));
 			if (success == false) {
 				message = "Failed to create file storage reference";
 				return 500;
@@ -568,7 +573,22 @@ public int authorize_request() 	{
 				return http_code;
 			} else {
 				//REALLY NEED TO ERROR HANDLE HERE
-				success = dbm.update_file_cache(uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"local",node_id);
+				String psndis = (String)request_ht.get(namespace_prefix + "-meta-psndistribution");
+				String psnres = (String)request_ht.get(namespace_prefix + "-meta-psnresiliance");
+				success = dbm.update_file_cache(uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"local",node_id,psndis,psnres);
+
+				Enumeration keys = request_ht.keys();
+				while ( keys.hasMoreElements() )
+				{
+					String key = (String)keys.nextElement();
+					String lkey = key.toLowerCase();
+					try {
+						if (lkey.substring(0,namespace_prefix.length()+5).equals(namespace_prefix + "-meta")) {
+							String outkey = key.substring(namespace_prefix.length()+6,key.length());
+							dbm.write_metadata(uuid,outkey,(String)request_ht.get(key));
+						}
+					} catch (Exception e) {}
+				}
 				if (success) {
 					return 200;
 				} else {
@@ -589,7 +609,7 @@ public int authorize_request() 	{
 			File store_path = store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + get_bucket_name() + "/" + uuid + "/" + uri);
 			if (store_path.exists()) {
 				String in_md5 = (String)request_ht.get("content-md5");
-				String md5_sum = get_md5(store_path); 
+				String md5_sum = get_md5(store_path);
 				if (in_md5.equals(md5_sum)) {
 					message = "File already present and up to date.";
 					return 409;
