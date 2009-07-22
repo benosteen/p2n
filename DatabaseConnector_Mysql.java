@@ -95,6 +95,19 @@ public class DatabaseConnector_Mysql {
 		
 	}
 	
+	public void write_metadata(String uuid,String outkey,String value) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("INSERT INTO object_metadata set mapping_uuid=?, word=?, value=?");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,outkey);
+			pstmt.setString(3,value);
+			pstmt.execute();
+		} catch (Exception e) {
+			e.printStackTrace();
+		} 
+	}
+	
 	public void unset_local_copy(String uuid) {
 		try {
 			Connection con = connectMysql();
@@ -129,6 +142,9 @@ public class DatabaseConnector_Mysql {
 			pstmt = con.prepareStatement("DELETE FROM files where mapping_uuid=?;");
 			pstmt.setString(1,uuid);
 			pstmt.execute();
+			pstmt = con.prepareStatement("DELETE FROM object_metadata where mapping_uuid=?;");
+			pstmt.setString(1,uuid);
+			pstmt.execute();
 			pstmt = con.prepareStatement("DELETE FROM node_files where mapping_uuid=?");
 			pstmt.setString(1,uuid);
 			pstmt.execute();
@@ -159,6 +175,9 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(1,uuid);
 			pstmt.setString(2,type);
 			pstmt.setString(3,path);
+			pstmt.execute();
+			pstmt = con.prepareStatement("DELETE FROM object_metadata where mapping_uuid=?;");
+			pstmt.setString(1,uuid);
 			pstmt.execute();
 			pstmt = con.prepareStatement("DELETE FROM node_files where mapping_uuid=? and type=? and node_id=?;");
 			pstmt.setString(1,uuid);
@@ -194,7 +213,7 @@ public class DatabaseConnector_Mysql {
 
 	}
 
-	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id) {
+	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String psndis, String psnres) {
 		try {
 			Connection con = connectMysql();
 			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?;");
@@ -207,8 +226,15 @@ public class DatabaseConnector_Mysql {
 			pstmt2.setString(1,node_id);
 			pstmt2.setString(2,uuid);
 			pstmt2.setString(3,type);
-			PreparedStatement pstmt3 = con.prepareStatement("UPDATE mappings set " +type+"_copy=1 where uuid=?;");
-			pstmt3.setString(1,uuid);
+			PreparedStatement pstmt3 = con.prepareStatement("UPDATE mappings set " +type+"_copy=1,psn_distribution=?,psn_resiliance=? where uuid=?;");
+			pstmt3.setString(3,uuid);
+			if (psndis == null) {
+				pstmt3.setInt(1,0);
+				pstmt3.setInt(2,0);
+			} else {
+				pstmt3.setInt(1,Integer.parseInt(psndis));
+				pstmt3.setInt(2,Integer.parseInt(psnres));
+			}
 			pstmt.execute();
 			pstmt2.execute();
 			pstmt3.execute();
@@ -289,6 +315,39 @@ public class DatabaseConnector_Mysql {
 			}
 		} catch (Exception e) {
 			return false;
+		}
+	}
+	
+	public Hashtable get_object_metadata(String uuid) {
+		Hashtable ht = new Hashtable();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT word,value from object_metadata where mapping_uuid=?;");
+			pstmt.setString(1,uuid);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				ht.put(rs.getString("word"),rs.getString("value"));
+			}
+			pstmt = con.prepareStatement("SELECT local_copy,psn_copy from mappings where uuid=?;");
+			pstmt.setString(1,uuid);
+			rs = pstmt.executeQuery();
+			rs.first();
+			String lc = "0";
+			try {
+				lc = "" + rs.getInt("local_copy");
+			} catch (Exception e) {
+			}
+			ht.put("LocalCopy",lc);
+			String psn = "0";
+			try {
+				psn = "" + rs.getInt("psn_copy");
+			} catch (Exception e) {
+			}
+			ht.put("PSNCopy",psn);
+			return ht;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return ht;
 		}
 	}
 
