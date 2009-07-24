@@ -6,30 +6,42 @@ import java.math.*;
 import org.xml.sax.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import org.xml.sax.helpers.XMLReaderFactory;
 import java.security.SignatureException;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 
 class ServiceInterface implements Runnable {
-	private String node_id = "1001";
-	private String node_url = "yomiko.ecs.soton.ac.uk:8452";
 	
-	private String url_base = "storage.p2n.org";
+	/**
+	  * Internal Global Variables
+	  */
 	private String namespace_prefix = "x-amz";
 	private Socket client;
-	private String log_file = "log/status.log_" + getDate();
 	private Hashtable request_ht = new Hashtable();
 	private Hashtable response_ht = new Hashtable();
 	private String message = "";	
-	private String base_path = "data/";
+	private Hashtable settings = new Hashtable();
 	private DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
 
-	ServiceInterface(Socket client) {
+	/**
+	  * Global Varibales set from configuration file
+	  */
+	private String node_id = "";
+	private String node_url = "";
+	private String url_base = "";
+	private String log_path = "";
+	private String log_file = ""; 
+	private String base_path = "";
+	private int allocated_space = 0;
+		
+
+	ServiceInterface(Socket client,Hashtable settings) {
 		this.client = client;
+		this.settings = settings;
 	}
 
+	
 	private String getDate() {
 		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
 		Date date = new Date();
@@ -46,7 +58,56 @@ class ServiceInterface implements Runnable {
 		//return dateFormat.format(date) + " GMT";
 	}
 
+	private String get_settings_value(String key) {
+		try {
+			Vector v = (Vector)settings.get(key);
+			String value = (String)v.get(0);
+			System.out.println(value + " = " + value);
+			return value;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "";
+		}
+	}
+
+	public boolean global_variables() {
+		try {
+			node_id = get_settings_value("node_id");
+			node_url =  get_settings_value("node_url");
+			String node_port = get_settings_value("node_port");
+			if (!node_port.equals("") || !(node_port == null)) {
+				node_url = node_url + ":" + node_port;
+			}
+			System.out.println(node_url);
+			url_base = get_settings_value("url_base");
+			log_path = get_settings_value("log_path");
+			log_file = log_path + "status.log_" + getDate();
+			base_path = get_settings_value("data_path");
+			allocated_space = Integer.parseInt(get_settings_value("allocated_space"));
+			dbm.setCredentials(get_settings_value("database_host"),get_settings_value("database_name"),get_settings_value("database_user"),get_settings_value("database_pass"));
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(0);
+		}
+		try {	
+			if (node_id.equals("") || node_url.equals("") || url_base.equals("") || log_path.equals("") || log_file.equals("") || base_path.equals("") || allocated_space == 0) {
+				return false;
+			} else {
+				return true;
+			}
+		} catch (Exception e) {
+			return false;
+		}
+
+	}
+
+
 	public void run(){
+		boolean success = global_variables();
+		if (!success) {
+			System.out.println("Configuration wrong!");
+			System.exit(0);
+		}
 		InputStream in = null;
 		OutputStream out = null;
 		BufferedWriter log_writer = null;
@@ -959,12 +1020,20 @@ public int authorize_request() 	{
 class SocketThrdServer {
 
 	ServerSocket server = null;
+	Hashtable settings;
+	DatabaseConnector_Mysql dbm;
 
-	SocketThrdServer(){
-		/**
-		 * Constructor
-		 * In here you can do things like construct a UI or something, but since each thread will handle things differently we don't want a master interfacce.
-		 */
+	SocketThrdServer(String conf_file){
+		NodeConfigurationHandler nch = new NodeConfigurationHandler();
+		DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
+		settings = nch.get_configuration_from_file(conf_file);
+		boolean state = nch.check_local_node_settings(settings,dbm);
+		if (!state) {
+			System.out.println("Failed to start node! Error in verifying local configuration");
+			System.exit(0);
+		} else {
+			System.out.println("Local verification passed, starting node and attempting to communicate with network");
+		}
 	} 
 
 	public void listenSocket(int port){
@@ -978,7 +1047,7 @@ class SocketThrdServer {
 		while(true){
 			ServiceInterface si;
 			try{
-				si = new ServiceInterface(server.accept()) ;
+				si = new ServiceInterface(server.accept(),settings);
 				Thread sit = new Thread(si);
 				sit.start();
 			} catch (IOException e) {
@@ -998,8 +1067,10 @@ class SocketThrdServer {
 			System.exit(-1);
 		}
 	}
+	
 
 	public static void main(String[] args){
+		String conf_file = "p2n.conf";
 		int port = 8452;
 		try {
 			if (args[0].equals("--help")) {
@@ -1007,14 +1078,14 @@ class SocketThrdServer {
 				System.out.println("");
 				System.out.println("Usage:");
 				System.out.println("");
-				System.out.println(" -p    Port Number to Listen On");
+				System.out.println(" -c    Path to Config File");
 				System.out.println("");
 				System.out.println("");
 				System.exit(0);
 			} else {
 				while (args.length > 0) {
-					if (args[0].equals("-p")) {
-						port = Integer.parseInt(args[1]);
+					if (args[0].equals("-c")) {
+						conf_file = args[1];
 					}
 					if (args.length > 2) {
 						String[] foo = new String[args.length-2];
@@ -1029,7 +1100,8 @@ class SocketThrdServer {
 			}
 		} catch ( Exception e) {
 		}
-		SocketThrdServer sts = new SocketThrdServer();
+		
+		SocketThrdServer sts = new SocketThrdServer(conf_file);
 		sts.listenSocket(port);
 	}
 }

@@ -3,12 +3,19 @@ import java.io.*;
 import java.sql.*;
 
 public class DatabaseConnector_Mysql {
-	String server = "localhost";
-	String database = "dct05r_p2n_node1";
-	String username = "p2n";
-	String password = "p2n_default";
+	String server;
+	String database;
+	String username;
+	String password;
 
 	public DatabaseConnector_Mysql() {
+	}
+
+	public void setCredentials(String server, String database, String username, String password) {
+		this.server = server;
+		this.database = database;
+		this.username = username;
+		this.password = password;
 	}
 
 	private Connection connectMysql() throws Exception {
@@ -77,7 +84,37 @@ public class DatabaseConnector_Mysql {
 			return "404";
 		}
 	}
-
+	public boolean register_local_keys(String access_id,String private_key) {
+		Connection con;
+		ResultSet rs;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT access_id,private_key from Users where user_type='local';");
+			rs = pstmt.executeQuery();
+			int count = 0;
+			while (rs.next()) {
+				count++;
+				if (rs.getString("access_id").equals(access_id) && rs.getString("private_key").equals(private_key)) {
+					disconnectMysql(con);
+					return true;
+				}
+			}
+			if (count > 0) {
+				disconnectMysql(con);
+				return false;
+			} 
+			pstmt = con.prepareStatement("INSERT INTO Users set access_id=?, private_key=?, user_type='local';");
+			pstmt.setString(1,access_id);
+			pstmt.setString(2,private_key);
+			pstmt.execute();
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+		
+	}
 	public boolean store_uuid_mapping(String access_id,String requested_path,String uuid,String acl) {
 		try {
 			Connection con = connectMysql();
@@ -350,6 +387,24 @@ public class DatabaseConnector_Mysql {
 			return ht;
 		}
 	}
+	
+	public Vector get_psn_uuids(String node_id) {
+		Vector vec = new Vector();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select uuid from mappings inner join nodes on nodes.access_id_owned=mappings.access_id where nodes.id=? and ISNULL(psn_copy) and psn_distribution>0;");
+			pstmt.setString(1,node_id);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				vec.add(rs.getString("uuid"));
+			}
+			return vec;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return vec;
+		}
+	}
+
 
 	public String get_local_path_from_uuid(String uuid) {
 		try {
