@@ -22,7 +22,8 @@
 DROP TABLE IF EXISTS `Users`;
 CREATE TABLE `Users` (
   `access_id` varchar(255) default NULL,
-  `private_key` varchar(255) default NULL
+  `private_key` varchar(255) default NULL,
+  `user_type` varchar(255) default NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
@@ -56,6 +57,17 @@ CREATE TABLE `mappings` (
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
+-- Table structure for table `node_associations`
+--
+
+DROP TABLE IF EXISTS `node_associations`;
+CREATE TABLE `node_associations` (
+  `node_id` varchar(255) default NULL,
+  `access_id_owned` varchar(255) default NULL,
+  `last_update` int(14) default NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+--
 -- Table structure for table `node_files`
 --
 
@@ -73,7 +85,9 @@ CREATE TABLE `node_files` (
 DROP TABLE IF EXISTS `nodes`;
 CREATE TABLE `nodes` (
   `id` varchar(255) NOT NULL,
-  `url` blob
+  `url` blob,
+  `url_base` varchar(255) default NULL,
+  `allocated_space` int(11) default NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
@@ -108,4 +122,4 @@ CREATE TABLE `scanning_log` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-07-22 16:09:21
+-- Dump completed on 2009-07-27 22:04:00
