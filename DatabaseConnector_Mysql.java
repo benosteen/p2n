@@ -18,6 +18,13 @@ public class DatabaseConnector_Mysql {
 		this.password = password;
 	}
 
+	public Long getDateTimeUnix() {
+		TimeZone tz = TimeZone.getTimeZone("UTC");
+		Calendar cal = new GregorianCalendar(tz);
+		cal.setTime(new java.util.Date());
+		return ((cal.getTime().getTime())/1000);
+	}
+
 	private Connection connectMysql() throws Exception {
 		Class.forName("com.mysql.jdbc.Driver").newInstance();
 		String connection_url = "jdbc:mysql://" + server + "/" + database;
@@ -84,6 +91,96 @@ public class DatabaseConnector_Mysql {
 			return "404";
 		}
 	}
+	
+	/**
+	  * Updates the network key, plain overwrite method!
+	  */
+	public boolean register_network_key(String access_id,String private_key) {
+		Connection con;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("DELETE from Users where user_type='network';");
+			pstmt.execute();
+			pstmt = con.prepareStatement("INSERT into Users set access_id=?, private_key=?, user_type=?");
+			pstmt.setString(1,access_id);
+			pstmt.setString(2,private_key);
+			pstmt.setString(3,"network");
+			pstmt.execute();
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+	}
+
+	public boolean register_access_key(String node_id, String access_id) {
+		Connection con;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("DELETE from node_associations where access_id_owned=?");
+			pstmt.setString(1,access_id);
+			pstmt.execute();
+			pstmt = con.prepareStatement("INSERT into node_associations set node_id=?, access_id_owned=?, last_update=?");
+			pstmt.setString(1,node_id);
+			pstmt.setString(2,access_id);
+			System.out.println("" + getDateTimeUnix());
+			pstmt.setLong(3,getDateTimeUnix());
+			pstmt.execute();
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+		
+	}
+
+	public boolean register_node_id(String node_id,String node_url,String url_base,int allocated_space){
+		Connection con;
+		ResultSet rs;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT id from nodes where id=? or url=?;");
+			pstmt.setString(1,node_id);
+			pstmt.setString(2,node_url);
+			rs = pstmt.executeQuery();
+			int count = 0;
+			boolean state = true;
+			while (rs.next()) {
+				count++;
+				if (rs.getString("id").equals(node_id)) {
+					state = true;
+				}
+			}
+			if (count > 1) {
+				disconnectMysql(con);
+				return false;
+			}
+			if (count == 0) {
+				pstmt = con.prepareStatement("INSERT INTO nodes set id=?, url=?, url_base=?, allocated_space=?;");
+				pstmt.setString(1,node_id);
+				pstmt.setString(2,node_url);
+				pstmt.setString(3,url_base);
+				pstmt.setInt(4,allocated_space);
+			} else if (state == true) {
+				pstmt = con.prepareStatement("UPDATE nodes set url=?, url_base=?, allocated_space=? where id=?;");
+				pstmt.setString(1,node_url);
+				pstmt.setString(2,url_base);
+				pstmt.setInt(3,allocated_space);
+				pstmt.setString(4,node_id);
+			}
+			pstmt.execute();
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return false;
+		
+		
+	}
+
 	public boolean register_local_keys(String access_id,String private_key) {
 		Connection con;
 		ResultSet rs;
@@ -392,7 +489,7 @@ public class DatabaseConnector_Mysql {
 		Vector vec = new Vector();
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("select uuid from mappings inner join nodes on nodes.access_id_owned=mappings.access_id where nodes.id=? and ISNULL(psn_copy) and psn_distribution>0;");
+			PreparedStatement pstmt = con.prepareStatement("select uuid from mappings inner join node_associations on nodes_associations.access_id_owned=mappings.access_id where node_associations.node_id=? and ISNULL(psn_copy) and psn_distribution>0;");
 			pstmt.setString(1,node_id);
 			ResultSet rs = pstmt.executeQuery();
 			while (rs.next()) {

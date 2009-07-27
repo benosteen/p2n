@@ -48,7 +48,7 @@ class ServiceInterface implements Runnable {
 		return dateFormat.format(date);
 	}
 
-	private String getDateTime() {
+	public String getDateTime() {
 		SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
 		format.setCalendar(Calendar.getInstance(new SimpleTimeZone(0, "GMT")));
 		return format.format(new Date());
@@ -57,6 +57,14 @@ class ServiceInterface implements Runnable {
 		//Date date = new Date();
 		//return dateFormat.format(date) + " GMT";
 	}
+
+	public Long getDateTimeUnix() {
+		TimeZone tz = TimeZone.getTimeZone("UTC");
+		Calendar cal = new GregorianCalendar(tz);
+		cal.setTime(new Date());
+		return ((cal.getTime().getTime())/1000);
+	}
+
 
 	private String get_settings_value(String key) {
 		try {
