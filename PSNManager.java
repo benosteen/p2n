@@ -25,14 +25,24 @@ public class PSNManager {
 		settings = nch.get_configuration_from_file(conf_file);
 		node_id = get_settings_value("node_id");
 		node_url =  get_settings_value("node_url");
-		String node_port = get_settings_value("node_port");
-		if (!node_port.equals("") || !(node_port == null)) {
-			node_url = node_url + ":" + node_port;
-		}
 		dbm.setCredentials(get_settings_value("database_host"),get_settings_value("database_name"),get_settings_value("database_user"),get_settings_value("database_pass"));
 		/*
 		 * Set up the rest if needed here
 		 */
+		settings = nch.update_settings_from_db(settings,dbm);
+	}
+
+	public void updateNetworkConfig() {
+		Vector vec = (Vector)settings.get("node");
+		PSNClient psn_con = new PSNClient();
+		for (Enumeration e = vec.elements(); e.hasMoreElements();) {
+			PSNNode node = (PSNNode)e.nextElement();
+			String node_url = node.get_node_url();
+			boolean reachable = psn_con.connectionTest(node_url);
+			if (node.get_node_id() == "" || node.get_node_id() == null) {
+				System.out.println("No data for " + node_url);
+			}
+		}
 	}
 
 	private String get_settings_value(String key) {
@@ -92,6 +102,7 @@ public class PSNManager {
 		
 		PSNManager psn_man = new PSNManager(conf_file);
 		psn_man.updateLocalInfo();
+		psn_man.updateNetworkConfig();
 	}
 
 

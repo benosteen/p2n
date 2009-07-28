@@ -70,7 +70,6 @@ class ServiceInterface implements Runnable {
 		try {
 			Vector v = (Vector)settings.get(key);
 			String value = (String)v.get(0);
-			System.out.println(value + " = " + value);
 			return value;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -82,11 +81,6 @@ class ServiceInterface implements Runnable {
 		try {
 			node_id = get_settings_value("node_id");
 			node_url =  get_settings_value("node_url");
-			String node_port = get_settings_value("node_port");
-			if (!node_port.equals("") || !(node_port == null)) {
-				node_url = node_url + ":" + node_port;
-			}
-			System.out.println(node_url);
 			url_base = get_settings_value("url_base");
 			log_path = get_settings_value("log_path");
 			log_file = log_path + "status.log_" + getDate();
