@@ -124,7 +124,6 @@ public class DatabaseConnector_Mysql {
 			pstmt = con.prepareStatement("INSERT into node_associations set node_id=?, access_id_owned=?, last_update=?");
 			pstmt.setString(1,node_id);
 			pstmt.setString(2,access_id);
-			System.out.println("" + getDateTimeUnix());
 			pstmt.setLong(3,getDateTimeUnix());
 			pstmt.execute();
 			disconnectMysql(con);
@@ -449,6 +448,65 @@ public class DatabaseConnector_Mysql {
 			}
 		} catch (Exception e) {
 			return false;
+		}
+	}
+	
+	public Vector getLocalKeyPairs(String node_id, Vector vec) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select access_id,private_key from Users inner join node_associations on node_associations.access_id_owned=Users.access_id where node_associations.node_id=?;");
+			pstmt.setString(1,node_id);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				Keypair kp = new Keypair(rs.getString("access_id"),rs.getString("private_key"));
+				boolean done = false;
+				for (Enumeration e = vec.elements(); e.hasMoreElements();) {
+					Keypair present = (Keypair)e.nextElement();
+					if (present.get_access_id().equals(rs.getString("access_id"))) {
+						done = true;
+					}
+				}
+				if (!done) {
+					vec.add(kp);
+				}
+			}
+			disconnectMysql(con);
+			return vec;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			return vec;
+		}
+	}
+	
+	public Vector getKnownNodes(String node_id,Vector vec) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select id,url,url_base,allocated_space from nodes where id!=?;");
+			pstmt.setString(1,node_id);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				PSNNode node = new PSNNode(rs.getString("url"));
+				node.set_node_id(rs.getString("id"));
+				node.set_url_base(rs.getString("url_base"));
+				node.set_allocated_space(rs.getInt("allocated_space"));
+				boolean done = false;
+				for (Enumeration e = vec.elements(); e.hasMoreElements();) {
+					PSNNode present = (PSNNode)e.nextElement();
+					if (present.get_node_url().equals(rs.getString("url"))) {
+						done = true;
+					}
+				}
+				if (!done) {
+					vec.add(node);
+				}
+			}
+			disconnectMysql(con);
+			return vec;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			return vec;
 		}
 	}
 	
