@@ -18,8 +18,8 @@ class PSNClient {
 
 	public boolean connectionTest(String node_url) {
 		int node_port = 80;
-		OutputStream out;
 		InputStream in;
+		OutputStream out;
 
 
 		if (node_url.indexOf(":") > 0) {
@@ -34,7 +34,7 @@ class PSNClient {
 			client = new Socket(node_url, node_port);
 			
 			out = client.getOutputStream();
-			out.flush();
+			//out.flush();
 
 			in = client.getInputStream();
 		
@@ -45,39 +45,47 @@ class PSNClient {
 			psout.println("");
 			
 			Vector input_lines = read_lines(in);
+			Hashtable response_ht = process_input(input_lines);	
 			
-			System.out.println("Rerurned");
-			String value = read_bitstream(in);
-			System.out.println("I Got");
-			System.out.println(value);
-
+			String content_type = (String)response_ht.get("content-type");
+			String in_clength = (String)response_ht.get("content-length");
+			in_clength = in_clength.trim();
+			
+			int content_length = Integer.parseInt(in_clength);
+			
+			
+			String value = read_bitstream(in,content_length);
+			value = value.trim();
+			if (value.equals("aws sanity check succeeded!")){
+				return true;
+			} else {
+				
+				return false;
+			}
+			
 		} catch (Exception e) {
 			e.printStackTrace();
 			return false;
 		}
-		return true;
-
-
 	}
 	
 
-	public Vector read_lines(InputStream ins) {
-		BufferedReader in = new BufferedReader(new InputStreamReader(ins));
-		
-		String line = "foo";
+	public Vector read_lines(InputStream in) {
+
 		Vector input_lines = new Vector();
-		int chars = 0;
-		try {
-			line = in.readLine();
-			line = line.trim();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+		String line = "first";
 		while(!line.equals("")){
-			try{
-				System.out.println("Request Line: " + line);
+			line = "";
+			try {
+				String current = "f";
+				byte[] b = new byte[1];
+				while (current.indexOf("\n") < 0) {
+					int done = in.read(b);
+					current = new String(b);
+					line = line + current;
+				}
+				line = line.trim();
 				input_lines.add(line);
-				line = in.readLine();
 			} catch (IOException e) {
 				try {
 					System.out.println("Connection Closed 2");
@@ -87,19 +95,16 @@ class PSNClient {
 				}
 			}
 		}
-		//try {
-		//	in.close();	
-		//} catch (Exception e) {
-		//	e.printStackTrace();
-		//}
+		try {
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		return input_lines;
 	}
 
-	public String read_bitstream(InputStream ins) {
+	public String read_bitstream(InputStream ins,int content_length) {
 		DataInputStream in = new DataInputStream(new BufferedInputStream(ins));
-		int clength = 27;
-		//int clength = Integer.parseInt(request_ht.get("content-length").toString().trim());
-		System.out.println("GOT LENGTH: " + clength);
+		int clength = content_length;
 		int ccount = 0;
 		String body = "";
 		int fl = clength;
@@ -117,17 +122,48 @@ class PSNClient {
 			}
 		}
 		if (fl > 0) {
-		System.out.println("READING");
 			try {
 				byte[] b = new byte[fl];
 				in.readFully(b);
 				buffer = buffer + (new String(b));
-				System.out.println("STUFF " + b);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
 		return buffer;
+	}
+
+	private Hashtable process_input(Vector input_lines) {
+		Hashtable response_ht = new Hashtable();
+		String line = (String)input_lines.get(0);
+		String[] request = line.split(" ");
+		response_ht.put("protocol",request[0]);
+		response_ht.put("code",request[1]);
+		response_ht.put("message",request[2]);
+		Enumeration e = input_lines.elements();
+		e.nextElement();
+		while (e.hasMoreElements()) {
+			line = (String)e.nextElement();
+			request = line.split(":",2);
+			String to_put = "";
+			String req_key = request[0].trim().toLowerCase();
+			if (req_key == null || req_key == "") {
+				continue;
+			}
+			try {
+				to_put = (String)response_ht.get(req_key);
+				if (to_put != null) {
+					to_put += ",";
+				}
+				if (to_put != null ) {
+					to_put += request[1].trim();
+				} else {
+					to_put = request[1].trim();
+				}
+				response_ht.put(req_key,to_put);
+			} catch (Exception not_existant) {}
+		}
+		return response_ht;
 	}
 
 }

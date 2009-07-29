@@ -41,6 +41,10 @@ public class PSNManager {
 			boolean reachable = psn_con.connectionTest(node_url);
 			if (node.get_node_id() == "" || node.get_node_id() == null) {
 				System.out.println("No data for " + node_url);
+				if (reachable) {
+					System.out.println(node_url + " is reachable!");
+					System.out.println("Sending Config");
+				}
 			}
 		}
 	}

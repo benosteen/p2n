@@ -267,7 +267,7 @@ class ServiceInterface implements Runnable {
 		out.println("X-Powered-By: Java");
 		out.println("Connection: close");
 		out.println("Content-Type: text/plain; charset=utf-8");
-		out.println("Content-Length: 25");
+		out.println("Content-Length: 28");
 		out.println("");
 		out.println("aws sanity check succeeded!");
 	}
