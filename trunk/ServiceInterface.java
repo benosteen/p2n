@@ -140,7 +140,7 @@ class ServiceInterface implements Runnable {
 		response_ht = new Hashtable();
 		Vector input_lines = new Vector();
 		
-		request_ht.put("content-length",0);
+		request_ht.put("content-length","0");
 		input_lines = read_lines(in,log_writer);
 		int http_code = process_input(input_lines);
 		String string_to_sign = "";
@@ -827,7 +827,40 @@ public int authorize_request() 	{
 			return 400;
 		}
 	}
-		
+	
+	public Vector read_lines(InputStream in, BufferedWriter log_writer) {
+
+		Vector input_lines = new Vector();
+		String line = "first";
+		while(!line.equals("")){
+			line = "";
+			try {
+				String current = "f";
+				byte[] b = new byte[1];
+				while (current.indexOf("\n") < 0) {
+					int done = in.read(b);
+					current = new String(b);
+					line = line + current;
+				}
+				line = line.trim();
+				System.out.println("Request Line: " + line);
+				input_lines.add(line);
+			} catch (IOException e) {
+				try {
+					System.out.println("Connection Closed 2");
+					client.close();
+					System.exit(0);
+				} catch (IOException ex) {
+				}
+			}
+		}
+		try {
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return input_lines;
+	}
+/*		
 	public Vector read_lines(InputStream ins, BufferedWriter log_writer) {
 		BufferedReader in = new BufferedReader(new InputStreamReader(ins));
 		
@@ -875,7 +908,7 @@ public int authorize_request() 	{
 		//}
 		return input_lines;
 	}
-
+*/
 	private int process_input(Vector input_lines) {
 		String line = (String)input_lines.get(0);
 		String[] request = line.split(" ");
@@ -911,20 +944,31 @@ public int authorize_request() 	{
 			while (e.hasMoreElements()) {
 				line = (String)e.nextElement();
 				request = line.split(":",2);
+				if (request.length < 2) {
+					continue;
+				}
 				String to_put = "";
 				String req_key = request[0].trim().toLowerCase();
 				try {
-					to_put = (String)request_ht.get(req_key);
-					if (to_put != null) {
-						to_put += ",";
+					if (req_key.equals("content-length")) {
+						to_put = ((String)request[1]).trim();
+					} else {
+						to_put = (String)request_ht.get(req_key);
+						if (to_put != null) {
+							to_put += ",";
+						}
+						if (to_put != null ) {
+							to_put += ((String)request[1]).trim();
+						} else {
+							to_put = ((String)request[1]).trim();
+						}
 					}
-				} catch (Exception not_existant) {}
-				if (to_put != null ) {
-					to_put += request[1].trim();
-				} else {
-					to_put = request[1].trim();
+				} catch (Exception array_wrong) {
+					array_wrong.printStackTrace();
+				} finally {
+					System.out.println(req_key + " PUT WITH " + to_put);
+					request_ht.put(req_key,to_put);
 				}
-				request_ht.put(req_key,to_put);
 			}
 			return 200;
 		} else {
