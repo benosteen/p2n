@@ -8,6 +8,9 @@ import java.io.File;
 import org.w3c.dom.Document;
 import org.w3c.dom.*;
 
+import javax.xml.transform.*;
+import javax.xml.transform.dom.*;
+import javax.xml.transform.stream.*;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 import org.xml.sax.SAXException;
@@ -71,6 +74,86 @@ class NodeConfigurationHandler {
 		return settings;
 	}
 	
+	public void get_node_from_settings(Hashtable settings) {
+		try {
+			DocumentBuilderFactory fact = DocumentBuilderFactory.newInstance();
+			DocumentBuilder bd = fact.newDocumentBuilder();
+			Document doc = bd.newDocument();
+			Element root = (Element) doc.createElement("config");
+			doc.appendChild(root);
+
+			for (Enumeration keys = settings.keys(); keys.hasMoreElements();) {
+				String key = (String)keys.nextElement();
+				Vector locals = get_local_conf_keys();
+				String value = null;
+				Element elem = null;
+				if (locals.contains(key)) {
+					continue;
+				}
+				Vector v = (Vector)settings.get(key);
+				try {
+					value = (String) v.get(0);
+				} catch (ClassCastException cle) {
+					for (int i=0; i<v.size(); i++) {
+						if (key.equals("node")) {
+							PSNNode xnode = (PSNNode)v.get(i);
+							root.appendChild(xnode.getXMLConfig(doc));
+						} 
+						if (key.equals("keypair")) {
+							Keypair xnode = (Keypair)v.get(i);
+							root.appendChild(xnode.getXMLConfig(doc));
+						} 
+
+					}
+				} finally {
+					if (value != null) {
+						System.out.println(key + " = " + value);
+						elem = (Element) doc.createElement(key);
+						elem.appendChild( doc.createTextNode(value) );
+						root.appendChild(elem);
+					}
+				}
+			}
+
+			System.out.println(xmlToString(root));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public Vector get_local_conf_keys() {
+		Vector v = new Vector();
+		try {
+			BufferedReader in = new BufferedReader(new FileReader("local_keys.conf"));
+			String line = in.readLine();
+			while (line != "" && line != null) {
+				v.add(line);
+				line = in.readLine();
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+		return v;
+	}
+
+	public String xmlToString(Node node) {
+		try {
+			Source source = new DOMSource(node);
+			StringWriter stringWriter = new StringWriter();
+			Result result = new StreamResult(stringWriter);
+			TransformerFactory factory = TransformerFactory.newInstance();
+			Transformer transformer = factory.newTransformer();
+			transformer.transform(source, result);
+			return stringWriter.getBuffer().toString();
+		} catch (TransformerConfigurationException e) {
+			e.printStackTrace();
+		} catch (TransformerException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}	
+
 	private Hashtable add_to_config(String key,Object value,Hashtable settings) {
 		Vector current;
 		try {

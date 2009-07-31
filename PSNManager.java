@@ -30,6 +30,7 @@ public class PSNManager {
 		 * Set up the rest if needed here
 		 */
 		settings = nch.update_settings_from_db(settings,dbm);
+		nch.get_node_from_settings(settings);
 	}
 
 	public void updateNetworkConfig() {
