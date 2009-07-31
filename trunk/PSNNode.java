@@ -1,3 +1,21 @@
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.math.*;
+import org.xml.sax.*;
+
+import java.io.File;
+import org.w3c.dom.Document;
+import org.w3c.dom.*;
+
+import javax.xml.transform.*;
+import javax.xml.transform.dom.*;
+import javax.xml.transform.stream.*;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.DocumentBuilder;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+
 class PSNNode {
 	String node_id = "";
 	String node_url = "";
@@ -38,5 +56,34 @@ class PSNNode {
 
 	public int get_allocated_space() {
 		return allocated_space;
+	}
+
+	public Element getXMLConfig(Document doc) {
+		try {
+			Element root = (Element) doc.createElement("node");
+			Hashtable stuff = new Hashtable();
+			stuff.put("node_id",this.get_node_id());
+			stuff.put("node_url",this.get_node_url());
+			stuff.put("url_base",this.get_url_base());
+			stuff.put("allocated_space",this.get_allocated_space());
+			for (Enumeration e = stuff.keys(); e.hasMoreElements();) {
+				String key = (String)e.nextElement();
+				String value = null;
+				if (key.equals("allocated_space")) {
+					value = (Integer)stuff.get(key) + "";
+				} else {
+					value = (String)stuff.get(key);
+				}
+				if (value != "" && value != null) {
+					Element sub = (Element) doc.createElement(key);
+					sub.appendChild( doc.createTextNode(value) );
+					root.appendChild(sub);
+				}
+			}
+			return root;	
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
 	}
 }
