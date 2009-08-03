@@ -450,7 +450,21 @@ public class DatabaseConnector_Mysql {
 			return false;
 		}
 	}
-	
+
+	public Keypair getNetworkKeypair() {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select access_id,private_key from Users where user_type='network';");
+			ResultSet rs = pstmt.executeQuery();
+			rs.next();
+			Keypair kp = new Keypair(rs.getString("access_id"),rs.getString("private_key"));
+			return kp;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
 	public Vector getLocalKeyPairs(String node_id, Vector vec) {
 		try {
 			Connection con = connectMysql();

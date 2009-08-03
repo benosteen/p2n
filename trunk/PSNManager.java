@@ -19,9 +19,9 @@ public class PSNManager {
 	private String base_path = "";
 	private int allocated_space = 0;
 	private Hashtable settings = new Hashtable();
+	private NodeConfigurationHandler nch = new NodeConfigurationHandler();
 
 	public PSNManager(String conf_file) {
-		NodeConfigurationHandler nch = new NodeConfigurationHandler();
 		settings = nch.get_configuration_from_file(conf_file);
 		node_id = get_settings_value("node_id");
 		node_url =  get_settings_value("node_url");
@@ -29,25 +29,43 @@ public class PSNManager {
 		/*
 		 * Set up the rest if needed here
 		 */
-		settings = nch.update_settings_from_db(settings,dbm);
-		nch.get_node_from_settings(settings);
 	}
 
 	public void updateNetworkConfig() {
 		Vector vec = (Vector)settings.get("node");
-		PSNClient psn_con = new PSNClient();
+		Keypair kp = dbm.getNetworkKeypair();
 		for (Enumeration e = vec.elements(); e.hasMoreElements();) {
 			PSNNode node = (PSNNode)e.nextElement();
-			String node_url = node.get_node_url();
-			boolean reachable = psn_con.connectionTest(node_url);
-			if (node.get_node_id() == "" || node.get_node_id() == null) {
-				System.out.println("No data for " + node_url);
-				if (reachable) {
-					System.out.println(node_url + " is reachable!");
-					System.out.println("Sending Config");
+			int back = node_handshake( node, kp );
+		}
+	}
+
+	private int node_handshake( PSNNode node, Keypair kp ) {
+		PSNClient psn_con = new PSNClient();
+		String node_url = node.get_node_url();
+		boolean reachable = psn_con.connectionTest(node_url);
+		if (node.get_node_id() == "" || node.get_node_id() == null) {
+			System.out.println("No data for " + node_url);
+			if (reachable) {
+				System.out.println(node_url + " is reachable!");
+				System.out.println("Sending Config");
+				settings = nch.update_settings_from_db(settings,dbm);
+				String xml = nch.get_settings_as_xml_string(settings);
+				HTTP_Response res = psn_con.perform_post(settings,node_url,xml,"text/xml","/?config",kp);
+				if (res.getErrorCode() == 202) {
+					String uuid = (String)res.getBody();
+					try {
+						String file_path = get_settings_value( "log_path" ) + node_url + ".data";
+						BufferedWriter out = new BufferedWriter(new FileWriter(file_path));
+						out.write(uuid);
+						out.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 				}
 			}
 		}
+		return 200;
 	}
 
 	private String get_settings_value(String key) {
