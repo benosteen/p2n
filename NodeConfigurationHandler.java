@@ -45,22 +45,25 @@ class NodeConfigurationHandler {
 				String node_name = "";
 				String node_value = "";
 				node_name = node.getNodeName();
-				if (node_name.equals("node")) {
-					Node inner_node = node.getFirstChild().getNextSibling();
-					String node_url = (((Element)inner_node).getFirstChild()).getNodeValue();
-					System.out.println("Creating node with url " + node_url);
-					PSNNode psnnode = new PSNNode(node_url);
-					settings = add_to_config(node_name,psnnode,settings);
-					continue;
-				}
-				if (node_name.equals("keypair")) {
-					Node inner_node = node.getFirstChild().getNextSibling();
-					String access_id = (((Element)inner_node).getFirstChild()).getNodeValue();
-					inner_node = inner_node.getNextSibling().getNextSibling().getFirstChild();
-					String private_key  = inner_node.getNodeValue();
-					Keypair kp = new Keypair(access_id,private_key);
-					settings = add_to_config(node_name,kp,settings);
-					continue;
+				if (node_name.equals("keypair") || node_name.equals("node")) {
+					Hashtable values = new Hashtable();
+					for (Node inner_node = node.getFirstChild(); inner_node != null; inner_node=inner_node.getNextSibling()) {
+						String inner_node_name = inner_node.getNodeName();
+						if (inner_node_name.equals("#text")) {
+							continue;
+						}
+						String inner_node_val = ((Element)inner_node).getFirstChild().getNodeValue();
+						values.put(inner_node_name,inner_node_val);
+					}
+					if (node_name.equals("keypair")) {
+						Keypair kp = new Keypair((String)values.get("access_id"),(String)values.get("private_key"));
+						settings = add_to_config(node_name,kp,settings);
+						continue;
+					} else if (node_name.equals("node")) {
+						PSNNode psnnode = new PSNNode((String)values.get("node_url"));
+						settings = add_to_config(node_name,psnnode,settings);
+						continue;
+					}
 				}
 				if (node_name.equals("#text")) {
 					continue;
@@ -74,7 +77,7 @@ class NodeConfigurationHandler {
 		return settings;
 	}
 	
-	public void get_node_from_settings(Hashtable settings) {
+	public Node get_node_from_settings(Hashtable settings) {
 		try {
 			DocumentBuilderFactory fact = DocumentBuilderFactory.newInstance();
 			DocumentBuilder bd = fact.newDocumentBuilder();
@@ -114,11 +117,17 @@ class NodeConfigurationHandler {
 					}
 				}
 			}
-
-			System.out.println(xmlToString(root));
+			return root;
 		} catch (Exception e) {
 			e.printStackTrace();
+			return null;
 		}
+	}
+
+	public String get_settings_as_xml_string(Hashtable settings) {
+		Node node = get_node_from_settings(settings);
+		String representation = xmlToString(node);
+		return representation;
 	}
 
 	public Vector get_local_conf_keys() {
@@ -169,7 +178,7 @@ class NodeConfigurationHandler {
 		return settings;
 	}
 
-	private String get_settings_value(Hashtable settings, String key) {
+	public String get_settings_value(Hashtable settings, String key) {
                 try {
                         Vector v = (Vector)settings.get(key);
                         String value = (String)v.get(0);

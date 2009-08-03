@@ -34,6 +34,7 @@ class ServiceInterface implements Runnable {
 	private String log_file = ""; 
 	private String base_path = "";
 	private int allocated_space = 0;
+	private long t_stamp = getDateTimeUnix();
 		
 
 	ServiceInterface(Socket client,Hashtable settings) {
@@ -216,6 +217,21 @@ class ServiceInterface implements Runnable {
 					http_code = put_bitstream(in,log_writer);
 				}
 				status = header_message(http_code,out);
+			} else if (type.equals("POST")) {
+				if (request_ht.get("uri").equals("/?config")) {
+					http_code = 100;
+				} else {
+					http_code = 400;
+					message = "Bad or Invalid Post Request";
+				}
+				status = header_message(http_code,out);
+				if (http_code == 100) {
+					http_code = process_post(in,log_writer);
+					status = header_message(http_code,out);
+					if (http_code == 202) {
+						http_code = node_handshake(message);
+					}
+				}
 			} else if (type.equals("GET")) {
 				http_code = get_file(out);
 			} else if (type.equals("HEAD")) {
@@ -293,6 +309,21 @@ class ServiceInterface implements Runnable {
 		}
 		return 200;
 	}
+	
+	private void output_object_headers(PrintStream out, File file, String content_type) throws Exception {
+			out.println("HTTP/1.1 200 OK");
+			System.out.println(t_stamp + ": SENDING HTTP/1.1 200 OK");
+			out.println("Date: " + getDateTime());
+			out.println("Server: Service Controller");
+			out.println("X-Powered-By: PSN Node Control");
+			out.println("Connection: close");
+			out.println("Content-Type: " + content_type);
+			out.println("Content-Length: " + file.length());
+			out.println("Last-Modified: " + file.lastModified());
+			out.println("Content-MD5: " + get_md5(file));
+			out.println("");
+			System.out.println(t_stamp + ": SENDING BLANK");
+	}
 
 	private void output_object_headers(PrintStream out, String uuid) throws Exception {
 			String actual_path = dbm.get_local_path_from_uuid(uuid);
@@ -319,20 +350,37 @@ class ServiceInterface implements Runnable {
 
 	private int get_file(OutputStream ops) {
 		try {
-			String requested_path = get_requested_path();
-			String uuid = dbm.get_uuid_from_requested_path(requested_path);
-			if (!dbm.has_local_copy(uuid) || uuid.equals("404")) {
-				message = "File Not Found";
-				return 404;
+			String actual_path = "";
+			String uuid = "";
+			if (request_ht.get("uri").equals("/?key")) {
+				actual_path = get_settings_value("log_path") + (String)request_ht.get(namespace_prefix + "-remote-host") + ".data";
+			} else {
+			
+				String requested_path = get_requested_path();
+				uuid = dbm.get_uuid_from_requested_path(requested_path);
+				if (!dbm.has_local_copy(uuid) || uuid.equals("404")) {
+					message = "File Not Found";
+					return 404;
+				}
+				actual_path = dbm.get_local_path_from_uuid(uuid);
+				if (actual_path.equals("404")) {
+					message = "File Not Found";
+					return 404;
+				}
 			}
-			String actual_path = dbm.get_local_path_from_uuid(uuid);
-			if (actual_path.equals("404")) {
-				message = "File Not Found";
-				return 404;
-			}
+
+
 			File file = new File(actual_path);
+			if (!file.exists()) {
+				message = "File Not Found (" + actual_path + ")";
+				return 404;
+			}
 			PrintStream out = new PrintStream(new BufferedOutputStream(ops));
-			output_object_headers(out,uuid);
+			if (uuid != "") {
+				output_object_headers(out,uuid);
+			} else {
+				output_object_headers(out,file,"text/plain");
+			}
 			int ccount=0;
 			
 			DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
@@ -391,90 +439,45 @@ private String get_requested_path() {
 }
 
 public int authorize_request() 	{
-	String string_to_sign="";
-	Hashtable amz_values = new Hashtable();
-	Vector amz_keys = new Vector();
-	Enumeration keys = request_ht.keys();
-	while ( keys.hasMoreElements() )
-	{
-		String key = (String)keys.nextElement();
-		if (key.length() > 4) {
-			String lkey = key.toLowerCase();
-			if (lkey.substring(0,namespace_prefix.length()).equals(namespace_prefix)) {
-				amz_keys.add(lkey);
-				amz_values.put(lkey,(String)request_ht.get(key));
-			}
-		}
-	}
-	Collections.sort(amz_keys);
 
+	String aws_access_string = (String)request_ht.get("authorization");
+	String[] parts = aws_access_string.split(" ");
+	System.out.println("AWS access string : " + aws_access_string);
+	aws_access_string = parts[1];
+	parts = aws_access_string.split(":");
+	String aws_access_id = parts[0];
+	String aws_signature = parts[1];
+
+	int http_code = dbm.userExists(aws_access_id);
+	if (http_code > 399) {
+		message = "InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records. (" + aws_access_id + ")";
+		return 403;
+	}
+	request_ht.put("access_id",aws_access_id);
+
+	String aws_private_key = dbm.getPrivateKey(aws_access_id);
+	if (aws_private_key.equals("500")) {
+		return 500;
+	}
+
+	PSNFunctions psnf = new PSNFunctions();
+	String string_to_sign = psnf.getStringToSign(request_ht,settings);
+
+	String our_sign = "";
 	try {
-		String type = (String)request_ht.get("type");
-		string_to_sign += type + "\n";
-		if (type.equals("GET") || type.equals("HEAD")) {
-			string_to_sign += "\n\n";
-			string_to_sign += (String)request_ht.get("date") + "\n";
-		} else if (type.equals("PUT")) {
-			if (request_ht.containsKey("content-md5")) {
-				string_to_sign += (String)request_ht.get("content-md5") + "\n";
-			} else {
-				string_to_sign += "\n";
-			}
-			if (request_ht.containsKey("content-type")) {
-				string_to_sign += (String)request_ht.get("content-type") + "\n";
-			} else {
-				string_to_sign += "\n";
-			}
-			string_to_sign += (String)request_ht.get("date") + "\n";
-			for(int i=0; i<amz_keys.size(); i++) {
-				String local_key = ((String)amz_keys.get(i));
-				string_to_sign += local_key + ":" + (String)amz_values.get(local_key) + "\n";
-			}
-		} else if (type.equals("DELETE")) {
-			string_to_sign += "\n";
-			string_to_sign += "\n";
-			if ((String)amz_values.get(namespace_prefix + "-date") == null) {
-				string_to_sign += (String)request_ht.get("date") + "\n";
-			} else {
-				string_to_sign += "\n";
-				string_to_sign += namespace_prefix + "-date:" + (String)amz_values.get(namespace_prefix + "-date") + "\n";
-			}
-		}
-
-		String requested_path = get_requested_path();
-		string_to_sign += requested_path;
-
-		String aws_access_string = (String)request_ht.get("authorization");
-		String[] parts = aws_access_string.split(" ");
-		aws_access_string = parts[1];
-		parts = aws_access_string.split(":");
-		String aws_access_id = parts[0];
-		String aws_signature = parts[1];
-		
-		int http_code = dbm.userExists(aws_access_id);
-		if (http_code > 399) {
-			message = "InvalidAccessKeyId: The AWS Access Key Id you provided does not exist in our records. (" + aws_access_id + ")";
-			return 403;
-		}
-		request_ht.put("access_id",aws_access_id);
-
-		String aws_private_key = dbm.getPrivateKey(aws_access_id);
-		if (aws_private_key.equals("500")) {
-			return 500;
-		}
-		String our_sign = calculateRFC2104HMAC(string_to_sign,aws_private_key);
-		if (our_sign.equals(aws_signature)) {
-			return 100;
-		} else {
-			System.out.println("Yours : " + aws_signature + " OURS " + our_sign + "\n" + string_to_sign);
-			message = "SignatureDoesNotMatch: The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method. For more information, see Authenticating REST Requests and Authenticating SOAP Requests for details.";
-			return 403;
-		} 
-	} catch (Exception s2serror) {
-		s2serror.printStackTrace();
-		return 400;
+		our_sign = psnf.calculateRFC2104HMAC(string_to_sign,aws_private_key);
+	} catch (Exception e) {
+		e.printStackTrace();
 	}
+	if (our_sign.equals(aws_signature)) {
+		return 100;
+	} else {
+		System.out.println("Yours : " + aws_signature + " OURS " + our_sign + "\n" + string_to_sign);
+		message = "SignatureDoesNotMatch: The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method. For more information, see Authenticating REST Requests and Authenticating SOAP Requests for details.";
+		return 403;
+	} 
 }
+
 	private int check_bucket() {
 		String host_part = (String)request_ht.get("host");
 		String bucket = "";
@@ -684,6 +687,71 @@ public int authorize_request() 	{
 		return 200;
 	}
 
+	public int node_handshake(String uuid) {
+		String store_path = log_path + uuid + ".xml";
+		NodeConfigurationHandler nch = new NodeConfigurationHandler();
+		Hashtable in_settings = nch.get_configuration_from_file(store_path);
+		String remote_node_url = nch.get_settings_value(in_settings,"node_url");
+
+		PSNClient psn_con = new PSNClient();
+
+		Hashtable metadata = new Hashtable();
+		metadata.put("remote-host",nch.get_settings_value(settings,"node_url"));
+
+		Keypair kp = dbm.getNetworkKeypair();
+		System.out.println(t_stamp + ": GOT HERE");
+		HTTP_Response response = psn_con.perform_get(remote_node_url,"/?key",metadata,kp,t_stamp);
+		System.out.println(response.getBody());
+		String res_uuid = (String)response.getBody();
+		if (res_uuid.equals(uuid)) {
+			System.out.println("SUCCESS");
+			return 200;
+			//SEND THIS CONFIG TO THAT NODE
+		} else {
+			return 500;
+		}
+	}
+
+	public int process_post(InputStream in, BufferedWriter log_writer) {
+		String uuid = new UUID().toString();
+		String store_path = log_path + uuid;
+		if (((String)request_ht.get("content-type")).indexOf("xml") > -1) {
+			store_path = store_path + ".xml";
+		} else if (((String)request_ht.get("content-type")).indexOf("text") > -1) {
+			store_path = store_path + ".txt";
+		} else {
+			store_path = store_path + ".data";
+		}
+		File tmp_file = new File(store_path);
+		
+		int http_code = read_bitstream(in,tmp_file);
+
+		if (http_code > 399) {
+			tmp_file.delete();
+			message = "Error reading input";
+			return http_code;
+		}
+
+		if (request_ht.get("uri").equals("/?config")) {
+			NodeConfigurationHandler nch = new NodeConfigurationHandler();
+			Hashtable in_settings = nch.get_configuration_from_file(store_path);
+			String remote_node_url = nch.get_settings_value(in_settings,"node_url");
+			String local_node_url = nch.get_settings_value(settings,"node_url");
+
+			if (remote_node_url.equals("BROKEN" + local_node_url)) {
+				message = "Bad Request : 2 nodes with same address";
+				tmp_file.delete();
+				return 400;
+			} 
+			message = uuid;
+			return 202;
+			
+
+		}
+
+		return http_code;
+	}
+
 	public int read_bitstream(InputStream ins,File store_path) {
 		DataInputStream in = new DataInputStream(new BufferedInputStream(ins));
 		FileOutputStream file_writer = null;
@@ -860,55 +928,7 @@ public int authorize_request() 	{
 		}
 		return input_lines;
 	}
-/*		
-	public Vector read_lines(InputStream ins, BufferedWriter log_writer) {
-		BufferedReader in = new BufferedReader(new InputStreamReader(ins));
-		
-		String line = "foo";
-		Vector input_lines = new Vector();
-		int chars = 0;
-		try {
-			line = in.readLine();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		try {
-			log_writer.write("Processing Request from " + client.getInetAddress().toString() + " (" + getDateTime() + ")"); log_writer.newLine();
-			line = line.trim();
-		} catch (IOException e) {
-			System.out.println("FAILED");
-			e.printStackTrace();
-			try {
-				System.out.println("Connection Closed 1");
-				log_writer.write("Read from " + client.getInetAddress().toString() +" at " + getDateTime() + " failed"); log_writer.newLine();
-				client.close();
-			} catch (IOException ex) {
-			}
-		}
-		while(!line.equals("")){
-			try{
-				System.out.println("Request Line: " + line);
-				input_lines.add(line);
-				log_writer.write(line); log_writer.newLine();
-				line = in.readLine();
-			} catch (IOException e) {
-				try {
-					System.out.println("Connection Closed 2");
-					log_writer.write("Read from " + client.getInetAddress().toString() +" at " + getDateTime() + " failed"); log_writer.newLine();
-					client.close();
-					System.exit(0);
-				} catch (IOException ex) {
-				}
-			}
-		}
-		//try {
-		//	in.close();	
-		//} catch (Exception e) {
-		//	e.printStackTrace();
-		//}
-		return input_lines;
-	}
-*/
+
 	private int process_input(Vector input_lines) {
 		String line = (String)input_lines.get(0);
 		String[] request = line.split(" ");
@@ -921,20 +941,26 @@ public int authorize_request() 	{
 				String aws_access_id = "";
 				String aws_signature = "";
 				String expires = "";
+				int success_count = 0;
 				for (int i=0; i<uri_params_bits.length; i++) {
 					String[] sides = uri_params_bits[i].split("=");
 					if (sides[0].equals("AWSAccessKeyId")) {
 						aws_access_id = sides[1];
+						success_count++;
 					}
 					if (sides[0].equals("Signature")) {
 						aws_signature = new URLDecoder().decode(sides[1]);
+						success_count++;
 					}
 					if (sides[0].equals("Expires")) {
 						expires = sides[1];
+						success_count++;
 					}
 				}
-				request_ht.put("authorization","AWS " + aws_access_id + ":" + aws_signature);
-				request_ht.put("date",expires);
+				if (success_count == 3) {
+					request_ht.put("authorization","AWS " + aws_access_id + ":" + aws_signature);
+					request_ht.put("date",expires);
+				}
 
 			}
 			request_ht.put("uri",uri);
@@ -966,7 +992,6 @@ public int authorize_request() 	{
 				} catch (Exception array_wrong) {
 					array_wrong.printStackTrace();
 				} finally {
-					System.out.println(req_key + " PUT WITH " + to_put);
 					request_ht.put(req_key,to_put);
 				}
 			}
@@ -978,45 +1003,6 @@ public int authorize_request() 	{
 		}
 	}
 
-	private static final String HMAC_SHA1_ALGORITHM = "HmacSHA1";
-
-
-	/**
-	 * Computes RFC 2104-compliant HMAC signature.
-	 * * @param data
-	 * The data to be signed.
-	 * @param key
-	 * The signing key.
-	 * @return
-	 * The Base64-encoded RFC 2104-compliant HMAC signature.
-	 * @throws
-	 * java.security.SignatureException when signature generation fails
-	 */
-	public static String calculateRFC2104HMAC(String data, String key)
-		throws java.security.SignatureException
-		{
-			String result;
-			try {
-
-				// get an hmac_sha1 key from the raw key bytes
-				SecretKeySpec signingKey = new SecretKeySpec(key.getBytes(), HMAC_SHA1_ALGORITHM);
-
-				// get an hmac_sha1 Mac instance and initialize with the signing key
-				Mac mac = Mac.getInstance(HMAC_SHA1_ALGORITHM);
-				mac.init(signingKey);
-
-				// compute the hmac on input data bytes
-				byte[] rawHmac = mac.doFinal(data.getBytes());
-
-				// base64-encode the hmac
-				result = Encoding.EncodeBase64(rawHmac);
-
-			} catch (Exception e) {
-				throw new SignatureException("Failed to generate HMAC : " + e.getMessage());
-			}
-			return result;
-		}
-
 
 
 	private int header_message(int http_code, OutputStream ops) {
@@ -1024,6 +1010,8 @@ public int authorize_request() 	{
 		switch (http_code) {
 			case 100: out.println("HTTP/1.1 100 Continue"); outputResponse(100,out); break;
 			case 200: out.println("HTTP/1.1 200 OK"); break;
+			case 201: out.println("HTTP/1.1 201 Created"); outputResponse(201,out); break;
+			case 202: out.println("HTTP/1.1 202 Accepted"); outputResponse(202,out); break;
 			case 204: out.println("HTTP/1.1 204 No Content"); outputResponse(204,out); break;
 			case 302: out.println("HTTP/1.1 302 Found"); outputResponse(302,out); break;
 			case 307: out.println("HTTP/1.1 307 Temporary Redirect"); outputResponse(307,out); break;

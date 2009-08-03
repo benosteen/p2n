@@ -12,11 +12,12 @@ import java.security.MessageDigest;
 
 class PSNClient {
 	Socket client;
-
+	private String namespace_prefix = "x-amz";
+	
 	public PSNClient() {
 	}
 
-	public boolean connectionTest(String node_url) {
+	private void setupSocket(String node_url) {
 		int node_port = 80;
 		InputStream in;
 		OutputStream out;
@@ -27,11 +28,23 @@ class PSNClient {
 			node_url = parts[0];
 			node_port = Integer.parseInt(parts[1]);
 		}
+
 		try {
-			System.out.println("attempting connection test");
-			String message = "GET /connection/test HTTP/1.1\nHost:" + node_url + "\n\n";
 			
 			client = new Socket(node_url, node_port);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+	}
+
+	public boolean connectionTest(String node_url) {
+		InputStream in;
+		OutputStream out;
+
+		try {
+			setupSocket(node_url);
 			
 			out = client.getOutputStream();
 			//out.flush();
@@ -56,6 +69,7 @@ class PSNClient {
 			
 			String value = read_bitstream(in,content_length);
 			value = value.trim();
+			client.close();
 			if (value.equals("aws sanity check succeeded!")){
 				return true;
 			} else {
@@ -68,13 +82,189 @@ class PSNClient {
 			return false;
 		}
 	}
+
+
+	public HTTP_Response perform_get(String node_url,String uri,Hashtable metadata,Keypair kp, long t_stamp) {
+		PSNFunctions psnf = new PSNFunctions();
+
+		setupSocket(node_url);
+
+		Hashtable request_ht = new Hashtable();
+		
+		String host = "";
+		if (node_url.indexOf(":") > -1) {
+			host = node_url.substring(0,node_url.indexOf(":"));
+		} else {
+			host = node_url;
+		}
+			
+		request_ht.put("type","GET");
+		request_ht.put("date",psnf.getDateTime());
+		request_ht.put("uri",uri);
+		
+		for (Enumeration e = metadata.keys(); e.hasMoreElements();) {
+			String key = (String)e.nextElement();
+			String value = (String)metadata.get(key);
+			request_ht.put(namespace_prefix + "-" + key,value);
+		}
+		
+		/*
+			GAH BAD AND WRONG
+		*/
+		Hashtable settings = new Hashtable();
+		Vector vec = new Vector();
+		vec.add("");
+		settings.put("url_base",vec);
+		vec = new Vector();
+		vec.add(node_url);
+		settings.put("node_url",vec);
+
+		String string_to_sign = psnf.getStringToSign(request_ht,settings);
+
+		System.out.println("STRING TO SIGN ==");
+		System.out.println(string_to_sign);
+		System.out.println("== END STRING TO SIGN");
+		
+		OutputStream out;
+		InputStream in;
+		String signature = "";
+
+		try {
+			signature = psnf.calculateRFC2104HMAC(string_to_sign, kp.get_private_key());
 	
+			request_ht.put("authorization","AWS " + kp.get_access_id() + ":" + signature);
+				
+			out = client.getOutputStream();
+
+			in = client.getInputStream();
+	
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+
+		PrintStream psout = new PrintStream(out);
+		psout.println("GET " + uri + " HTTP/1.1");
+		psout.println("Host: " + host);
+		psout.println("Date: " + (String)request_ht.get("date"));
+		for (Enumeration e = metadata.keys(); e.hasMoreElements();) {
+			String key = (String)e.nextElement();
+			String value = (String)metadata.get(key);
+			psout.println(namespace_prefix + "-" + key + ": " + value);
+		}
+		psout.println("Authorization: " + request_ht.get("authorization"));
+		psout.println("");
+		try {	
+		Thread.sleep(1000);
+		} catch (Exception e) {
+		}
+
+		System.out.println(t_stamp + ": GOT HERE in psn_con");
+		Vector input_lines = read_lines(in);
+		for (Enumeration e = input_lines.elements(); e.hasMoreElements();) {
+			System.out.println("PSNCON: " + e.nextElement());
+		}
+
+		Hashtable response_ht = process_input(input_lines);
+		int clength = Integer.parseInt((String)response_ht.get("content-length"));
+		System.out.println("GOT HERE in psn_con " + clength);
+		String response_body = read_bitstream(in,clength);
+		HTTP_Response res = new HTTP_Response(Integer.parseInt((String)response_ht.get("code")));
+		res.setBody(response_body);
+		return res;
+
+
+	}
+
+
+	public HTTP_Response perform_post(Hashtable settings, String node_url,String body,String mime_type,String uri,Keypair kp) {
+		PSNFunctions psnf = new PSNFunctions();
+
+		setupSocket(node_url);
+
+		Hashtable request_ht = new Hashtable();
+		
+		String host = "";
+		if (node_url.indexOf(":") > -1) {
+			host = node_url.substring(0,node_url.indexOf(":"));
+		} else {
+			host = node_url;
+		}
+			
+		int content_length = body.length();
+		
+		request_ht.put("type","POST");
+		request_ht.put("host",host);
+		request_ht.put("date",psnf.getDateTime());
+		request_ht.put("content-type",mime_type);
+		request_ht.put("content-length",content_length);
+		request_ht.put("uri",uri);
+		
+		String string_to_sign = psnf.getStringToSign(request_ht,settings);
+
+		System.out.println("STRING TO SIGN ==");
+		System.out.println(string_to_sign);
+		System.out.println("== END STRING TO SIGN");
+		
+
+		OutputStream out;
+		InputStream in;
+		String signature = "";
+
+		try {
+			signature = psnf.calculateRFC2104HMAC(string_to_sign, kp.get_private_key());
+	
+			request_ht.put("authorization","AWS " + kp.get_access_id() + ":" + signature);
+				
+			out = client.getOutputStream();
+	
+			in = client.getInputStream();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+
+		PrintStream psout = new PrintStream(out);
+		psout.println("POST " + uri + " HTTP/1.1");
+		psout.println("Host: " + host);
+		psout.println("Date: " + (String)request_ht.get("date"));
+		psout.println("Content-Type: " + mime_type);
+		psout.println("Content-Length: " + content_length);
+		psout.println("Authorization: " + request_ht.get("authorization"));
+		psout.println("");
+
+		Vector input_lines = read_lines(in);
+		
+		Hashtable response_ht = process_input(input_lines);
+		if ((Integer.parseInt((String)response_ht.get("code"))) != 100) {
+			int clength = Integer.parseInt((String)response_ht.get("content-length"));
+			String response_body = read_bitstream(in,clength);
+			HTTP_Response res = new HTTP_Response(Integer.parseInt((String)response_ht.get("code")));
+			res.setBody(response_body);
+			return res;
+		} else {
+			psout.println(body);
+		}
+
+		input_lines = read_lines(in);
+		
+		response_ht = process_input(input_lines);
+		int clength = Integer.parseInt((String)response_ht.get("content-length"));
+		String response_body = read_bitstream(in,clength);
+		HTTP_Response res = new HTTP_Response(Integer.parseInt((String)response_ht.get("code")));
+		res.setBody(response_body);
+	
+		return res;
+
+	}
+
 
 	public Vector read_lines(InputStream in) {
 
 		Vector input_lines = new Vector();
 		String line = "first";
-		while(!line.equals("")){
+		boolean flag = false;
+		while(!line.equals("") || flag==false){
 			line = "";
 			try {
 				String current = "f";
@@ -85,7 +275,12 @@ class PSNClient {
 					line = line + current;
 				}
 				line = line.trim();
-				input_lines.add(line);
+				System.out.println("LINE <=" + line + "=>");
+
+				if (line != "") {
+					input_lines.add(line);
+					flag = true;
+				}
 			} catch (IOException e) {
 				try {
 					System.out.println("Connection Closed 2");
