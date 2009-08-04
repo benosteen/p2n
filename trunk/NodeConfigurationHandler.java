@@ -189,6 +189,43 @@ class NodeConfigurationHandler {
                 }
         }	
 
+	public boolean associate_remote_node(Hashtable settings, Hashtable remote_settings, DatabaseConnector_Mysql dbm) {
+		dbm.setCredentials(get_settings_value(settings,"database_host"),get_settings_value(settings,"database_name"),get_settings_value(settings,"database_user"),get_settings_value(settings,"database_pass"));
+		
+		String node_id = get_settings_value(settings,"node_id");
+		String node_url = get_settings_value(settings,"node_url");
+		String url_base = get_settings_value(settings,"url_base");
+		int allocated_space = Integer.parseInt(get_settings_value(settings,"allocated_space"));
+
+
+		if (node_id == null || node_id == ("") || node_url == null || node_url == ("") ) {
+			System.out.println("Failed blank");
+			return false;
+		}
+		
+		String access_id = "";
+		String private_key = "";
+		Vector keypairs = (Vector)settings.get("keypair");
+		for (Enumeration e = keypairs.elements(); e.hasMoreElements();) {
+			Keypair kp = (Keypair)e.nextElement();
+			access_id = kp.get_access_id();
+			private_key = kp.get_private_key();
+			if (!dbm.register_remote_keys(access_id,private_key,node_id)) {
+				System.out.println("Failed database checks");
+				return false;
+			}
+		}
+
+
+		if (!dbm.register_node_id(node_id,node_url,url_base,allocated_space)) {
+			System.out.println("Failed to register node id, major error!");
+			return false;
+		}
+
+		return true;
+
+	}
+
 	public boolean check_local_node_settings(Hashtable settings, DatabaseConnector_Mysql dbm) {
 		dbm.setCredentials(get_settings_value(settings,"database_host"),get_settings_value(settings,"database_name"),get_settings_value(settings,"database_user"),get_settings_value(settings,"database_pass"));
 		

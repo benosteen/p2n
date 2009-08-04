@@ -70,6 +70,8 @@ public class DatabaseConnector_Mysql {
 		}
 
 	}
+	
+
 	public String get_uuid_from_request(String access_id,String requested_path) {
 		Connection con;
 		ResultSet rs;
@@ -157,17 +159,19 @@ public class DatabaseConnector_Mysql {
 				return false;
 			}
 			if (count == 0) {
-				pstmt = con.prepareStatement("INSERT INTO nodes set id=?, url=?, url_base=?, allocated_space=?;");
+				pstmt = con.prepareStatement("INSERT INTO nodes set id=?, url=?, url_base=?, allocated_space=?,last_handshake=?;");
 				pstmt.setString(1,node_id);
 				pstmt.setString(2,node_url);
 				pstmt.setString(3,url_base);
 				pstmt.setInt(4,allocated_space);
+				pstmt.setLong(5,getDateTimeUnix());
 			} else if (state == true) {
-				pstmt = con.prepareStatement("UPDATE nodes set url=?, url_base=?, allocated_space=? where id=?;");
+				pstmt = con.prepareStatement("UPDATE nodes set url=?, url_base=?, allocated_space=?, last_handshake=? where id=?;");
 				pstmt.setString(1,node_url);
 				pstmt.setString(2,url_base);
 				pstmt.setInt(3,allocated_space);
-				pstmt.setString(4,node_id);
+				pstmt.setLong(4,getDateTimeUnix());
+				pstmt.setString(5,node_id);
 			}
 			pstmt.execute();
 			disconnectMysql(con);
@@ -175,8 +179,41 @@ public class DatabaseConnector_Mysql {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		return false;	
+	}
+	
+	public boolean register_remote_keys(String access_id,String private_key,String node_id) {
+		Connection con;
+		ResultSet rs;
+		boolean state;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT access_id,private_key from Users where access_id=?;");
+			rs = pstmt.executeQuery();
+			int count = 0;
+			while (rs.next()) {
+				count++;
+				if (rs.getString("access_id").equals(access_id) && rs.getString("private_key").equals(private_key)) {
+					disconnectMysql(con);
+					state = register_access_key(node_id,access_id);
+				}
+			}
+			if (count > 0) {
+				state = register_access_key(node_id,access_id);
+				disconnectMysql(con);
+				return state;
+			} 
+			pstmt = con.prepareStatement("INSERT INTO Users set access_id=?, private_key=?, user_type='remote';");
+			pstmt.setString(1,access_id);
+			pstmt.setString(2,private_key);
+			pstmt.execute();
+			disconnectMysql(con);
+			state = register_access_key(node_id,access_id);
+			return state;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		return false;
-		
 		
 	}
 
