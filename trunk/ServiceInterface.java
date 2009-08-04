@@ -701,6 +701,10 @@ public int authorize_request() 	{
 		metadata.put("meta-remote-host",nch.get_settings_value(settings,"node_url"));
 
 		Keypair kp = dbm.getNetworkKeypair();
+		try {
+			Thread.sleep(1000);
+		} catch (Exception e) {
+		}
 		HTTP_Response response = psn_con.perform_get(remote_node_url,"/?key",metadata,kp);
 		System.out.println(response.getBody());
 		String res_uuid = (String)response.getBody();
@@ -714,6 +718,7 @@ public int authorize_request() 	{
 			Hashtable remote_node_settings = nch.get_configuration_from_file(remote_conf_path);
 			boolean success = nch.associate_remote_node(settings,remote_node_settings,dbm);
 			if (success) {
+				System.out.println("DONE?");
 				return 200;
 			} else {
 				message = "Failed to insert node config";
@@ -721,6 +726,7 @@ public int authorize_request() 	{
 			}
 			//SEND THIS CONFIG TO THAT NODE
 		} else {
+			System.out.println("UUID's didn't match");
 			return 500;
 		}
 	}
@@ -930,7 +936,6 @@ public int authorize_request() 	{
 				try {
 					System.out.println("Connection Closed 2");
 					client.close();
-					System.exit(0);
 				} catch (IOException ex) {
 				}
 			}

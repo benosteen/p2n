@@ -188,21 +188,16 @@ public class DatabaseConnector_Mysql {
 		boolean state;
 		try {
 			con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("SELECT access_id,private_key from Users where access_id=?;");
+			PreparedStatement pstmt = con.prepareStatement("SELECT access_id,private_key from Users;");
 			rs = pstmt.executeQuery();
 			int count = 0;
 			while (rs.next()) {
 				count++;
 				if (rs.getString("access_id").equals(access_id) && rs.getString("private_key").equals(private_key)) {
-					disconnectMysql(con);
 					state = register_access_key(node_id,access_id);
+					return state;
 				}
 			}
-			if (count > 0) {
-				state = register_access_key(node_id,access_id);
-				disconnectMysql(con);
-				return state;
-			} 
 			pstmt = con.prepareStatement("INSERT INTO Users set access_id=?, private_key=?, user_type='remote';");
 			pstmt.setString(1,access_id);
 			pstmt.setString(2,private_key);
