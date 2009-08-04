@@ -69,11 +69,9 @@ public class PSNManager {
 		if (node.get_node_id().equals(this_node_id)) {
 			next_step = false;
 		}
-		if (node.get_last_handshake() < (psnf.getDateTimeUnix() - 300)) {
+		if (node.get_last_handshake() > (psnf.getDateTimeUnix() - 300)) {
 			next_step = false;
 			System.out.println("Not sending to " + node_url + " as was done recently");
-			System.out.println("Last Handshake = " + node.get_last_handshake());
-			System.out.println("-5 min = " + (psnf.getDateTimeUnix() - 300));
 		}
 		if (next_step && psn_con.connectionTest(node_url)) {
 			System.out.println("Sending data to <" + node_url+ ">");
