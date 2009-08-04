@@ -50,22 +50,23 @@ class PSNFunctions {
 		} catch (Exception e) {
 		}
 		String host_part = (String)request_ht.get("host");
-		String cache = host_part;
 		try {
-			host_part = host_part.replace(url_base,"");
-			host_part = host_part.replace(node_url,"");
-		} catch (Exception e) {
-			host_part = cache;
-		}
-		try {
-			if (host_part.indexOf(":") > 0) {
-				host_part = host_part.substring(0,host_part.indexOf(":"));
-			}
-			if (host_part.substring(host_part.length()-1,host_part.length()).equals(".")) {
-				host_part = host_part.substring(0,host_part.length()-1);
-			}
-			if (!host_part.equals("")) {
-				host_part = "/" + host_part;
+			if (host_part.indexOf(url_base)>-1) {
+				String cache = host_part;
+				try {
+					host_part = host_part.replace(url_base,"");
+				} catch (Exception e) {
+					host_part = cache;
+				}
+				if (host_part.indexOf(":") > 0) {
+					host_part = host_part.substring(0,host_part.indexOf(":"));
+				}
+				if (host_part.substring(host_part.length()-1,host_part.length()).equals(".")) {
+					host_part = host_part.substring(0,host_part.length()-1);
+				}
+				if (!host_part.equals("")) {
+					host_part = "/" + host_part;
+				}
 			}
 		} catch (Exception e) {
 		}
@@ -73,7 +74,7 @@ class PSNFunctions {
 		if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
 			uri = uri.substring(0,uri.indexOf("?"));
 		}
-		if (host_part != null) {
+		if (host_part != null && host_part.indexOf(url_base)>-1) {
 			return host_part + uri;
 		} else {
 			return uri;
@@ -138,6 +139,9 @@ class PSNFunctions {
 
 			String requested_path = get_requested_path(request_ht,settings);
 			string_to_sign += requested_path;
+			System.out.println("======");
+			System.out.println(string_to_sign);
+			System.out.println("======");
 			return string_to_sign;
 		} catch (Exception e) {
 			e.printStackTrace();
