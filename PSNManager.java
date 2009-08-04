@@ -62,6 +62,8 @@ public class PSNManager {
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
+				} else {
+					System.out.println(res.getBody());
 				}
 			}
 		}

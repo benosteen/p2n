@@ -16,6 +16,14 @@ class PSNClient {
 	
 	public PSNClient() {
 	}
+	public static void main(String[] args) {
+		PSNClient psn_con = new PSNClient();
+		Hashtable metadata = new Hashtable();
+		metadata.put("meta-remote-host","yomiko.ecs.soton.ac.uk:8452");
+		Keypair kp = new Keypair("P2N74329JDMSNGOLPF3","GFFdsfWEw3+3Ggfsdsd+DSGFGsffshf322fhgu4k");
+		HTTP_Response res = psn_con.perform_get("yomiko.ecs.soton.ac.uk:8452","/?key",metadata,kp);
+		System.out.println(res.getBody());
+	}
 
 	private void setupSocket(String node_url) {
 		int node_port = 80;
@@ -84,7 +92,7 @@ class PSNClient {
 	}
 
 
-	public HTTP_Response perform_get(String node_url,String uri,Hashtable metadata,Keypair kp, long t_stamp) {
+	public HTTP_Response perform_get(String node_url,String uri,Hashtable metadata,Keypair kp) {
 		PSNFunctions psnf = new PSNFunctions();
 
 		setupSocket(node_url);
@@ -121,9 +129,6 @@ class PSNClient {
 
 		String string_to_sign = psnf.getStringToSign(request_ht,settings);
 
-		System.out.println("STRING TO SIGN ==");
-		System.out.println(string_to_sign);
-		System.out.println("== END STRING TO SIGN");
 		
 		OutputStream out;
 		InputStream in;
@@ -154,20 +159,11 @@ class PSNClient {
 		}
 		psout.println("Authorization: " + request_ht.get("authorization"));
 		psout.println("");
-		try {	
-		Thread.sleep(1000);
-		} catch (Exception e) {
-		}
 
-		System.out.println(t_stamp + ": GOT HERE in psn_con");
 		Vector input_lines = read_lines(in);
-		for (Enumeration e = input_lines.elements(); e.hasMoreElements();) {
-			System.out.println("PSNCON: " + e.nextElement());
-		}
 
 		Hashtable response_ht = process_input(input_lines);
 		int clength = Integer.parseInt((String)response_ht.get("content-length"));
-		System.out.println("GOT HERE in psn_con " + clength);
 		String response_body = read_bitstream(in,clength);
 		HTTP_Response res = new HTTP_Response(Integer.parseInt((String)response_ht.get("code")));
 		res.setBody(response_body);
@@ -202,10 +198,6 @@ class PSNClient {
 		
 		String string_to_sign = psnf.getStringToSign(request_ht,settings);
 
-		System.out.println("STRING TO SIGN ==");
-		System.out.println(string_to_sign);
-		System.out.println("== END STRING TO SIGN");
-		
 
 		OutputStream out;
 		InputStream in;
@@ -263,8 +255,7 @@ class PSNClient {
 
 		Vector input_lines = new Vector();
 		String line = "first";
-		boolean flag = false;
-		while(!line.equals("") || flag==false){
+		while(!line.equals("")){
 			line = "";
 			try {
 				String current = "f";
@@ -275,11 +266,9 @@ class PSNClient {
 					line = line + current;
 				}
 				line = line.trim();
-				System.out.println("LINE <=" + line + "=>");
 
 				if (line != "") {
 					input_lines.add(line);
-					flag = true;
 				}
 			} catch (IOException e) {
 				try {
@@ -360,5 +349,6 @@ class PSNClient {
 		}
 		return response_ht;
 	}
+
 
 }

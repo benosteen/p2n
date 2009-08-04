@@ -34,7 +34,6 @@ class ServiceInterface implements Runnable {
 	private String log_file = ""; 
 	private String base_path = "";
 	private int allocated_space = 0;
-	private long t_stamp = getDateTimeUnix();
 		
 
 	ServiceInterface(Socket client,Hashtable settings) {
@@ -227,6 +226,7 @@ class ServiceInterface implements Runnable {
 				status = header_message(http_code,out);
 				if (http_code == 100) {
 					http_code = process_post(in,log_writer);
+					System.out.println("HTTP CODE : " + http_code);
 					status = header_message(http_code,out);
 					if (http_code == 202) {
 						http_code = node_handshake(message);
@@ -234,6 +234,9 @@ class ServiceInterface implements Runnable {
 				}
 			} else if (type.equals("GET")) {
 				http_code = get_file(out);
+				if (http_code != 200) {
+					status = header_message(http_code,out);
+				}
 			} else if (type.equals("HEAD")) {
 				http_code = send_head(out);
 			} else if (type.equals("DELETE")) {
@@ -312,7 +315,6 @@ class ServiceInterface implements Runnable {
 	
 	private void output_object_headers(PrintStream out, File file, String content_type) throws Exception {
 			out.println("HTTP/1.1 200 OK");
-			System.out.println(t_stamp + ": SENDING HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: PSN Node Control");
@@ -322,7 +324,6 @@ class ServiceInterface implements Runnable {
 			out.println("Last-Modified: " + file.lastModified());
 			out.println("Content-MD5: " + get_md5(file));
 			out.println("");
-			System.out.println(t_stamp + ": SENDING BLANK");
 	}
 
 	private void output_object_headers(PrintStream out, String uuid) throws Exception {
@@ -353,7 +354,7 @@ class ServiceInterface implements Runnable {
 			String actual_path = "";
 			String uuid = "";
 			if (request_ht.get("uri").equals("/?key")) {
-				actual_path = get_settings_value("log_path") + (String)request_ht.get(namespace_prefix + "-remote-host") + ".data";
+				actual_path = get_settings_value("log_path") + (String)request_ht.get(namespace_prefix + "-meta-remote-host") + ".data";
 			} else {
 			
 				String requested_path = get_requested_path();
@@ -375,7 +376,7 @@ class ServiceInterface implements Runnable {
 				message = "File Not Found (" + actual_path + ")";
 				return 404;
 			}
-			PrintStream out = new PrintStream(new BufferedOutputStream(ops));
+			PrintStream out = new PrintStream(ops);
 			if (uuid != "") {
 				output_object_headers(out,uuid);
 			} else {
@@ -413,6 +414,7 @@ class ServiceInterface implements Runnable {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		message = "finished";
 		return 200;
 	}
 
@@ -696,16 +698,27 @@ public int authorize_request() 	{
 		PSNClient psn_con = new PSNClient();
 
 		Hashtable metadata = new Hashtable();
-		metadata.put("remote-host",nch.get_settings_value(settings,"node_url"));
+		metadata.put("meta-remote-host",nch.get_settings_value(settings,"node_url"));
 
 		Keypair kp = dbm.getNetworkKeypair();
-		System.out.println(t_stamp + ": GOT HERE");
-		HTTP_Response response = psn_con.perform_get(remote_node_url,"/?key",metadata,kp,t_stamp);
+		HTTP_Response response = psn_con.perform_get(remote_node_url,"/?key",metadata,kp);
 		System.out.println(response.getBody());
 		String res_uuid = (String)response.getBody();
 		if (res_uuid.equals(uuid)) {
-			System.out.println("SUCCESS");
-			return 200;
+			String remote_conf_path = log_path + uuid + ".xml";
+			File remote_conf = new File(remote_conf_path);
+			if (!(remote_conf.exists())) {
+				message = "Remote conf file not found @ " + remote_conf_path;
+				return 404;
+			} 
+			Hashtable remote_node_settings = nch.get_configuration_from_file(remote_conf_path);
+			boolean success = nch.associate_remote_node(settings,remote_node_settings,dbm);
+			if (success) {
+				return 200;
+			} else {
+				message = "Failed to insert node config";
+				return 400;
+			}
 			//SEND THIS CONFIG TO THAT NODE
 		} else {
 			return 500;
@@ -738,7 +751,7 @@ public int authorize_request() 	{
 			String remote_node_url = nch.get_settings_value(in_settings,"node_url");
 			String local_node_url = nch.get_settings_value(settings,"node_url");
 
-			if (remote_node_url.equals("BROKEN" + local_node_url)) {
+			if (remote_node_url.equals(local_node_url)) {
 				message = "Bad Request : 2 nodes with same address";
 				tmp_file.delete();
 				return 400;
