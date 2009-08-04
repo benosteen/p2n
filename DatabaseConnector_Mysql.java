@@ -137,6 +137,20 @@ public class DatabaseConnector_Mysql {
 		
 	}
 
+	public void updateNodeHandshake(String node_id) {
+		Connection con;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("UPDATE nodes set last_handshake=? where id=?;");
+			pstmt.setLong(1,getDateTimeUnix());
+			pstmt.setString(2,node_id);
+			pstmt.execute();
+			disconnectMysql(con);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
 	public boolean register_node_id(String node_id,String node_url,String url_base,int allocated_space){
 		Connection con;
 		ResultSet rs;
@@ -159,19 +173,17 @@ public class DatabaseConnector_Mysql {
 				return false;
 			}
 			if (count == 0) {
-				pstmt = con.prepareStatement("INSERT INTO nodes set id=?, url=?, url_base=?, allocated_space=?,last_handshake=?;");
+				pstmt = con.prepareStatement("INSERT INTO nodes set id=?, url=?, url_base=?, allocated_space=?");
 				pstmt.setString(1,node_id);
 				pstmt.setString(2,node_url);
 				pstmt.setString(3,url_base);
 				pstmt.setInt(4,allocated_space);
-				pstmt.setLong(5,getDateTimeUnix());
 			} else if (state == true) {
-				pstmt = con.prepareStatement("UPDATE nodes set url=?, url_base=?, allocated_space=?, last_handshake=? where id=?;");
+				pstmt = con.prepareStatement("UPDATE nodes set url=?, url_base=?, allocated_space=? where id=?;");
 				pstmt.setString(1,node_url);
 				pstmt.setString(2,url_base);
 				pstmt.setInt(3,allocated_space);
-				pstmt.setLong(4,getDateTimeUnix());
-				pstmt.setString(5,node_id);
+				pstmt.setString(4,node_id);
 			}
 			pstmt.execute();
 			disconnectMysql(con);
@@ -528,14 +540,15 @@ public class DatabaseConnector_Mysql {
 	public Vector getKnownNodes(String node_id,Vector vec) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("select id,url,url_base,allocated_space from nodes;");
+			PreparedStatement pstmt = con.prepareStatement("select id,url,url_base,allocated_space,last_handshake from nodes;");
 			ResultSet rs = pstmt.executeQuery();
 			while (rs.next()) {
 				PSNNode node = new PSNNode(rs.getString("url"));
 				node.set_node_id(rs.getString("id"));
-				System.out.println("JUST SET NODE ID " + node.get_node_id());
+				System.out.println("JUST SET NODE ID OF " +  rs.getString("url") + " to " + node.get_node_id());
 				node.set_url_base(rs.getString("url_base"));
 				node.set_allocated_space(rs.getInt("allocated_space"));
+				node.set_last_handshake(rs.getInt("last_handshake"));
 				boolean done = false;
 				for (Enumeration e = vec.elements(); e.hasMoreElements();) {
 					PSNNode present = (PSNNode)e.nextElement();

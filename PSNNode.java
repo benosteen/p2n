@@ -20,6 +20,7 @@ class PSNNode {
 	String node_id = "";
 	String node_url = "";
 	String url_base = "";
+	int last_handshake = 0;
 	int allocated_space = 0;
 
 	public PSNNode(String node_url) {
@@ -27,7 +28,6 @@ class PSNNode {
 	}
 
 	public void set_node_id(String node_id) {
-		System.out.println("SETTING NODE ID : " + node_id);
 		this.node_id = node_id;
 	}
 
@@ -49,6 +49,14 @@ class PSNNode {
 
 	public String get_url_base() {
 		return url_base;
+	}
+
+	public void set_last_handshake(int last_handshake) {
+		this.last_handshake = last_handshake;
+	}
+
+	public int get_last_handshake() {
+		return last_handshake;
 	}
 
 	public void set_allocated_space(int allocated_space) {

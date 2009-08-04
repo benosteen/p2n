@@ -269,7 +269,8 @@ class NodeConfigurationHandler {
 	public Hashtable update_settings_from_db(Hashtable settings,DatabaseConnector_Mysql dbm) {
 		String node_id = get_settings_value(settings,"node_id");
 		Vector keypairs = dbm.getLocalKeyPairs(node_id,(Vector)settings.get("keypair"));
-		Vector nodes = dbm.getKnownNodes(node_id,(Vector)settings.get("node"));
+		//Vector nodes = dbm.getKnownNodes(node_id,(Vector)settings.get("node"));
+		Vector nodes = dbm.getKnownNodes(node_id,new Vector());
 		settings.put("keypair",keypairs);
 		settings.put("node",nodes);
 		return settings;

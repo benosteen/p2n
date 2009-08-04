@@ -60,37 +60,41 @@ public class PSNManager {
 	}
 
 	private int node_handshake( PSNNode node, Keypair kp ) {
+		PSNFunctions psnf = new PSNFunctions();
 		PSNClient psn_con = new PSNClient();
 		String node_url = node.get_node_url();
 		node_url = node_url.trim();
-		boolean reachable = psn_con.connectionTest(node_url);
-		if (node_url.equals("yomiko.ecs.soton.ac.uk:8452")) {
-			System.out.println("FUCKING MATCHED");
-			return 100;
+		String this_node_id = get_settings_value( "node_id" );
+		boolean next_step = true;
+		if (node.get_node_id().equals(this_node_id)) {
+			next_step = false;
 		}
-		//if (node.get_node_id() == "" || node.get_node_id() == null) {
+		if (node.get_last_handshake() < (psnf.getDateTimeUnix() - 300)) {
+			next_step = false;
+			System.out.println("Not sending to " + node_url + " as was done recently");
+		}
+		if (next_step && psn_con.connectionTest(node_url)) {
 			System.out.println("Sending data to <" + node_url+ ">");
-			if (reachable) {
-				System.out.println(node_url + " is reachable!");
-				System.out.println("Sending Config");
-				settings = nch.update_settings_from_db(settings,dbm);
-				String xml = nch.get_settings_as_xml_string(settings);
-				HTTP_Response res = psn_con.perform_post(settings,node_url,xml,"text/xml","/?config",kp);
-				if (res.getErrorCode() == 202) {
-					String uuid = (String)res.getBody();
-					try {
-						String file_path = get_settings_value( "log_path" ) + node_url + ".data";
-						BufferedWriter out = new BufferedWriter(new FileWriter(file_path));
-						out.write(uuid);
-						out.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				} else {
-					System.out.println(res.getBody());
-				}
+			settings = nch.update_settings_from_db(settings,dbm);
+			String xml = nch.get_settings_as_xml_string(settings);
+			HTTP_Response res = psn_con.perform_post(settings,node_url,xml,"text/xml","/?config",kp);
+			if (res != null) {
+				dbm.updateNodeHandshake(node.get_node_id());
 			}
-		//}
+			if (res.getErrorCode() == 202) {
+				String uuid = (String)res.getBody();
+				try {
+					String file_path = get_settings_value( "log_path" ) + node_url + ".data";
+					BufferedWriter out = new BufferedWriter(new FileWriter(file_path));
+					out.write(uuid);
+					out.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			} else {
+				System.out.println(res.getBody());
+			}
+		}
 		return 200;
 	}
 
