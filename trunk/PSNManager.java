@@ -32,6 +32,7 @@ public class PSNManager {
 	}
 	
 	public PSNManager(Hashtable settings) {
+		this.settings = settings;
 		node_id = get_settings_value("node_id");
 		node_url =  get_settings_value("node_url");
 		dbm.setCredentials(get_settings_value("database_host"),get_settings_value("database_name"),get_settings_value("database_user"),get_settings_value("database_pass"));
@@ -41,20 +42,34 @@ public class PSNManager {
 	}
 
 	public void updateNetworkConfig() {
+		System.out.println("TEST: " + settings.get("test"));
 		Vector vec = (Vector)settings.get("node");
 		Keypair kp = dbm.getNetworkKeypair();
+		System.out.println("NUMBER OF NODES: " + vec.size());
 		for (Enumeration e = vec.elements(); e.hasMoreElements();) {
 			PSNNode node = (PSNNode)e.nextElement();
+			System.out.println("NODE ID for " + node.get_node_url() + " = " + node.get_node_id());
 			int back = node_handshake( node, kp );
+			try {
+				Thread.sleep(10000);
+			} catch (Exception se) {
+				se.printStackTrace();
+			}
+			System.out.println("DONE SLEEPING");
 		}
 	}
 
 	private int node_handshake( PSNNode node, Keypair kp ) {
 		PSNClient psn_con = new PSNClient();
 		String node_url = node.get_node_url();
+		node_url = node_url.trim();
 		boolean reachable = psn_con.connectionTest(node_url);
-		if (node.get_node_id() == "" || node.get_node_id() == null) {
-			System.out.println("No data for " + node_url);
+		if (node_url.equals("yomiko.ecs.soton.ac.uk:8452")) {
+			System.out.println("FUCKING MATCHED");
+			return 100;
+		}
+		//if (node.get_node_id() == "" || node.get_node_id() == null) {
+			System.out.println("Sending data to <" + node_url+ ">");
 			if (reachable) {
 				System.out.println(node_url + " is reachable!");
 				System.out.println("Sending Config");
@@ -75,7 +90,7 @@ public class PSNManager {
 					System.out.println(res.getBody());
 				}
 			}
-		}
+		//}
 		return 200;
 	}
 
