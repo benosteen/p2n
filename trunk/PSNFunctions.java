@@ -49,9 +49,13 @@ class PSNFunctions {
 			node_url = node_url.substring(0,node_url.indexOf(":"));
 		} catch (Exception e) {
 		}
+		int check = -1;
 		String host_part = (String)request_ht.get("host");
 		try {
-			if (host_part.indexOf(url_base)>-1) {
+			System.out.println("HOST PART: " + host_part);
+			System.out.println("URL_BASE: " +url_base);
+			check = host_part.indexOf(url_base);
+			if (check>-1) {
 				String cache = host_part;
 				try {
 					host_part = host_part.replace(url_base,"");
@@ -74,7 +78,7 @@ class PSNFunctions {
 		if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
 			uri = uri.substring(0,uri.indexOf("?"));
 		}
-		if (host_part != null && host_part.indexOf(url_base)>-1) {
+		if (host_part != null && check>-1) {
 			return host_part + uri;
 		} else {
 			return uri;
