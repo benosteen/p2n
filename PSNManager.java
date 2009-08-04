@@ -30,6 +30,15 @@ public class PSNManager {
 		 * Set up the rest if needed here
 		 */
 	}
+	
+	public PSNManager(Hashtable settings) {
+		node_id = get_settings_value("node_id");
+		node_url =  get_settings_value("node_url");
+		dbm.setCredentials(get_settings_value("database_host"),get_settings_value("database_name"),get_settings_value("database_user"),get_settings_value("database_pass"));
+		/*
+		 * Set up the rest if needed here
+		 */
+	}
 
 	public void updateNetworkConfig() {
 		Vector vec = (Vector)settings.get("node");
