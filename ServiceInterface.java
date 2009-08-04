@@ -136,6 +136,7 @@ class ServiceInterface implements Runnable {
 	
 	private boolean process_single_request(InputStream in, OutputStream out, BufferedWriter log_writer) {
 		String line = "";
+		System.out.println("NEW REQUEST");
 		request_ht = new Hashtable();
 		response_ht = new Hashtable();
 		Vector input_lines = new Vector();
@@ -226,7 +227,7 @@ class ServiceInterface implements Runnable {
 				status = header_message(http_code,out);
 				if (http_code == 100) {
 					http_code = process_post(in,log_writer);
-					System.out.println("HTTP CODE : " + http_code);
+					System.out.println("HTTP CODE : " + http_code + " " + message);
 					status = header_message(http_code,out);
 					if (http_code == 202) {
 						http_code = node_handshake(message);

@@ -274,7 +274,6 @@ class PSNClient {
 				try {
 					System.out.println("Connection Closed 2");
 					client.close();
-					System.exit(0);
 				} catch (IOException ex) {
 				}
 			}

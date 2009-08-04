@@ -27,6 +27,7 @@ class PSNNode {
 	}
 
 	public void set_node_id(String node_id) {
+		System.out.println("SETTING NODE ID : " + node_id);
 		this.node_id = node_id;
 	}
 

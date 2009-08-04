@@ -528,12 +528,12 @@ public class DatabaseConnector_Mysql {
 	public Vector getKnownNodes(String node_id,Vector vec) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("select id,url,url_base,allocated_space from nodes where id!=?;");
-			pstmt.setString(1,node_id);
+			PreparedStatement pstmt = con.prepareStatement("select id,url,url_base,allocated_space from nodes;");
 			ResultSet rs = pstmt.executeQuery();
 			while (rs.next()) {
 				PSNNode node = new PSNNode(rs.getString("url"));
 				node.set_node_id(rs.getString("id"));
+				System.out.println("JUST SET NODE ID " + node.get_node_id());
 				node.set_url_base(rs.getString("url_base"));
 				node.set_allocated_space(rs.getInt("allocated_space"));
 				boolean done = false;
