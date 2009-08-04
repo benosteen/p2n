@@ -718,6 +718,9 @@ public int authorize_request() 	{
 			Hashtable remote_node_settings = nch.get_configuration_from_file(remote_conf_path);
 			boolean success = nch.associate_remote_node(settings,remote_node_settings,dbm);
 			if (success) {
+				nch.update_settings_from_db(settings,dbm);
+				PSNManager psn_man = new PSNManager(settings);
+				psn_man.updateNetworkConfig();
 				System.out.println("DONE?");
 				return 200;
 			} else {
