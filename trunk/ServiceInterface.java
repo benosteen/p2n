@@ -316,6 +316,7 @@ class ServiceInterface implements Runnable {
 	
 	private void output_object_headers(PrintStream out, File file, String content_type) throws Exception {
 			out.println("HTTP/1.1 200 OK");
+			System.out.println("SENDING: HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: PSN Node Control");
