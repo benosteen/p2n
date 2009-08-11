@@ -618,7 +618,7 @@ public class DatabaseConnector_Mysql {
 		Vector vec = new Vector();
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("select uuid from mappings inner join node_associations on nodes_associations.access_id_owned=mappings.access_id where node_associations.node_id=? and ISNULL(psn_copy) and psn_distribution>0;");
+			PreparedStatement pstmt = con.prepareStatement("select uuid from mappings inner join node_associations on node_associations.access_id_owned=mappings.access_id where node_associations.node_id=? and ISNULL(psn_copy) and psn_distribution>0;");
 			pstmt.setString(1,node_id);
 			ResultSet rs = pstmt.executeQuery();
 			while (rs.next()) {
@@ -628,6 +628,45 @@ public class DatabaseConnector_Mysql {
 		} catch (Exception e) {
 			e.printStackTrace();
 			return vec;
+		}
+	}
+
+	public PSNObject get_psn_object(String uuid) {
+		Hashtable ht = new Hashtable();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select * from mappings where uuid=?");
+			pstmt.setString(1,uuid);
+			ResultSet rs = pstmt.executeQuery();
+			PSNObject psno = new PSNObject();	
+			if (rs.next()) {
+				psno.setUUID(rs.getString("uuid"));
+				psno.setRequestedPath(rs.getString("requested_path"));
+				psno.setACL(rs.getString("acl"));
+				if (rs.getInt("local_copy") == 1) {
+					psno.setLocalCopy(true);
+				} else {
+					psno.setLocalCopy(false);
+				}
+				if (rs.getInt("psn_copy") == 1) {
+					psno.setPSNCopy(true);
+				} else {
+					psno.setPSNCopy(false);
+				}
+				pstmt = con.prepareStatement("select path,md5_sum,mime_type from files where mapping_uuid=? and type=?");
+				pstmt.setString(1,uuid);
+				pstmt.setString(2,"local");
+				ResultSet rs2 = pstmt.executeQuery();
+				if (rs2.next()) {
+					psno.setLocalPath(rs2.getString("path"));
+					psno.setMD5Sum(rs2.getString("md5_sum"));
+					psno.setMimeType(rs2.getString("mime_type"));
+				}
+			}
+			return psno;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
 		}
 	}
 
