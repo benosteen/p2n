@@ -150,6 +150,18 @@ public class DatabaseConnector_Mysql {
 			e.printStackTrace();
 		}
 	}
+	
+	public void clearNodeHandshakes() {
+		Connection con;
+		try {
+			con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("UPDATE nodes set last_handshake=NULL where 1=1;");
+			pstmt.execute();
+			disconnectMysql(con);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 
 	public boolean register_node_id(String node_id,String node_url,String url_base,int allocated_space){
 		Connection con;
