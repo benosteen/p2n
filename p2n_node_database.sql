@@ -87,7 +87,8 @@ CREATE TABLE `nodes` (
   `id` varchar(255) NOT NULL,
   `url` blob,
   `url_base` varchar(255) default NULL,
-  `allocated_space` int(11) default NULL
+  `allocated_space` int(11) default NULL,
+  `last_handshake` int(14) default NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 --
@@ -122,4 +123,4 @@ CREATE TABLE `scanning_log` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-07-27 22:04:00
+-- Dump completed on 2009-08-12 15:33:09
