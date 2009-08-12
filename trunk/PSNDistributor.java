@@ -25,7 +25,8 @@ class PSNDistributor implements Runnable {
 		dbm.setCredentials(nch.get_settings_value(settings,"database_host"),nch.get_settings_value(settings,"database_name"),nch.get_settings_value(settings,"database_user"),nch.get_settings_value(settings,"database_pass"));
 		PSNObject psno = dbm.get_psn_object(uuid);
 		if (psno.getLocalCopy()) {
-			System.out.println("GOT THE OBJECT");	
+			File f = new File(psno.getLocalPath());
+			System.out.println("File Size:" + f.length());
 		}
 	}
 
