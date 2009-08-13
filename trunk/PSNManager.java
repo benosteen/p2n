@@ -42,6 +42,7 @@ public class PSNManager {
 	}
 
 	public void updateNetworkConfig() {
+		settings = nch.update_settings_from_db(settings,dbm);
 		Vector vec = (Vector)settings.get("node");
 		Keypair kp = dbm.getNetworkKeypair();
 		try {
@@ -54,12 +55,13 @@ public class PSNManager {
 			PSNNode node = (PSNNode)e.nextElement();
 			System.out.println("NODE ID for " + node.get_node_url() + " = " + node.get_node_id());
 			int back = node_handshake( node, kp );
-			try {
-				Thread.sleep(10000);
-			} catch (Exception se) {
-				se.printStackTrace();
+			if (back > 0) {
+				try {
+					Thread.sleep(10000);
+				} catch (Exception se) {
+					se.printStackTrace();
+				}
 			}
-			System.out.println("DONE SLEEPING");
 		}
 	}
 
@@ -69,17 +71,15 @@ public class PSNManager {
 		String node_url = node.get_node_url();
 		node_url = node_url.trim();
 		String this_node_id = get_settings_value( "node_id" );
-		boolean next_step = true;
 		if (node.get_node_id().equals(this_node_id)) {
-			next_step = false;
+			return 0;
 		}
 		if (node.get_last_handshake() > (psnf.getDateTimeUnix() - 300)) {
-			next_step = false;
 			System.out.println("Not sending to " + node_url + " as was done recently");
+			return 0;
 		}
-		if (next_step && psn_con.connectionTest(node_url)) {
+		if (psn_con.connectionTest(node_url)) {
 			System.out.println("Sending data to <" + node_url+ ">");
-			settings = nch.update_settings_from_db(settings,dbm);
 			String xml = nch.get_settings_as_xml_string(settings);
 			HTTP_Response res = psn_con.perform_post(settings,node_url,xml,"text/xml","/?config",kp);
 			if (res != null) {
@@ -165,6 +165,7 @@ public class PSNManager {
 			psn_man.updateNetworkConfig();
 
 			try {
+				System.out.println("Sleeping");
 				Thread.sleep(600000);
 			} catch (Exception e) {
 				e.printStackTrace();
