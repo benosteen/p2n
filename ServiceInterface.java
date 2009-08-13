@@ -395,7 +395,7 @@ class ServiceInterface implements Runnable {
 				try {
 					byte[] b = new byte[read_size];
 					in.readFully(b);
-					out.write(b);
+					out2.write(b);
 					fl = fl - read_size;
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -406,7 +406,7 @@ class ServiceInterface implements Runnable {
 				try {
 					byte[] b = new byte[fl];
 					in.readFully(b);
-					out.write(b);
+					out2.write(b);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
