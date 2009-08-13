@@ -42,13 +42,13 @@ class PSNDistributor implements Runnable {
 		if (dist < 1) {
 			return;
 		}
-
+/*
 		if (dist > dbm.getNodeCount()) {
 			System.out.println("LOG: Not enough nodes available to perform required distribution");
 			System.out.println("At this point you should reduce the distrubution and distribute the object in this way until the desired distribution is available, or you should refuse the object earlier.");
 			return;
 		}
-		
+*/		
 		String time = Long.toString(System.nanoTime());
 		String path = nch.get_settings_value(settings,"data_path") + time;
 		String file_name = psno.getLocalPath().substring(psno.getLocalPath().lastIndexOf("/")+1,psno.getLocalPath().length());
