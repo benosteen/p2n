@@ -44,7 +44,12 @@ public class PSNManager {
 	public void updateNetworkConfig() {
 		Vector vec = (Vector)settings.get("node");
 		Keypair kp = dbm.getNetworkKeypair();
-		System.out.println("NUMBER OF NODES: " + vec.size());
+		try {
+			int size = vec.size();
+		} catch (NullPointerException e) {
+			System.out.println("Nothing to update, no network");
+			return;
+		}
 		for (Enumeration e = vec.elements(); e.hasMoreElements();) {
 			PSNNode node = (PSNNode)e.nextElement();
 			System.out.println("NODE ID for " + node.get_node_url() + " = " + node.get_node_id());

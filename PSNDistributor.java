@@ -37,7 +37,15 @@ class PSNDistributor implements Runnable {
 		int dist = psno.getPSNDistribution();
 		int res = psno.getPSNResiliance();
 		int required = dist - res;
+		
+
 		if (dist < 1) {
+			return;
+		}
+
+		if (dist > dbm.getNodeCount()) {
+			System.out.println("LOG: Not enough nodes available to perform required distribution");
+			System.out.println("At this point you should reduce the distrubution and distribute the object in this way until the desired distribution is available, or you should refuse the object earlier.");
 			return;
 		}
 		
@@ -106,15 +114,19 @@ class PSNDistributor implements Runnable {
 		} catch ( Exception e ) {
 			e.printStackTrace();
 		}
-		flag = false;
+		
 		if (flag == false) {
 			System.out.println("FAILED");
 			deleteDir(tempdir);
 		}
+	
+		Vector done_nodes = new Vector();
+
 		System.out.println("DONE returning");
 
-		
+			
 	}
+
 
 	public boolean deleteDir(File dir) {
 		if (dir.isDirectory()) {
