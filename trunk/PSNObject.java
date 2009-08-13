@@ -46,6 +46,22 @@ class PSNObject {
 		return psn_copy;
 	}
 
+	public void setPSNDistribution(int dist) {
+		this.psn_distribution = dist;
+	}
+
+	public int getPSNDistribution() {
+		return psn_distribution;
+	}
+
+	public void setPSNResiliance(int res) {
+		this.psn_resiliance = res;
+	}
+
+	public int getPSNResiliance() {
+		return psn_resiliance;
+	}
+
 	public void setACL(String acl) {
 		this.acl = acl;
 	}

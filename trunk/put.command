@@ -14,7 +14,7 @@ X-Amz-Meta-PSNResiliance: 1
 Content-Disposition: attachment; filename=database.dat
 Content-Encoding: gzip
 Content-Length: 5
-Authorization: AWS 0PN5J17HBGZHT7JJ3X82:SR8CoQHF65bghG6FC0dgzdJXIpw=
+Authorization: AWS 0PN5J17HBGZHT7JJ3X84:5DS01lLlr/nQkNF7gWmo+vNJOHg=
 
 HTTP/1.1 100 Continue
 Date: Thu, 25 Jun 2009 15:34:24 BST

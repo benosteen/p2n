@@ -20,14 +20,116 @@ class PSNDistributor implements Runnable {
 	}
 
 	public void run() {
+
+		boolean flag = true;
+
 		NodeConfigurationHandler nch = new NodeConfigurationHandler();
 		DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
 		dbm.setCredentials(nch.get_settings_value(settings,"database_host"),nch.get_settings_value(settings,"database_name"),nch.get_settings_value(settings,"database_user"),nch.get_settings_value(settings,"database_pass"));
 		PSNObject psno = dbm.get_psn_object(uuid);
-		if (psno.getLocalCopy()) {
-			File f = new File(psno.getLocalPath());
-			System.out.println("File Size:" + f.length());
+		if (!psno.getLocalCopy()) {
+			return;
 		}
+		File f = new File(psno.getLocalPath());
+		if (f.length() < 1) {
+			return;
+		}
+		int dist = psno.getPSNDistribution();
+		int res = psno.getPSNResiliance();
+		int required = dist - res;
+		if (dist < 1) {
+			return;
+		}
+		
+		String time = Long.toString(System.nanoTime());
+		String path = nch.get_settings_value(settings,"data_path") + time;
+		String file_name = psno.getLocalPath().substring(psno.getLocalPath().lastIndexOf("/")+1,psno.getLocalPath().length());
+	
+		File tempdir = new File(path);
+
+		if (!(tempdir.mkdir())) {
+			return;
+		}
+		String command = "ln -s " + psno.getLocalPath() + " " + time + ".tmp";
+		File link = new File(time+".tmp");
+
+		System.out.println(command);
+		try {
+			Process p = Runtime.getRuntime().exec(command);
+			BufferedReader stdInput = new BufferedReader(new InputStreamReader(p.getInputStream()));
+			BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+			
+			String s = null;
+
+			System.out.println("Here is the standard output of the command:\n");
+			while ((s = stdInput.readLine()) != null) {
+				flag = false;
+				System.out.println(s);
+			}
+
+			// read any errors from the attempted command
+
+			System.out.println("Here is the standard error of the command (if any):\n");
+			while ((s = stdError.readLine()) != null) {
+				flag = false;
+				System.out.println(s);
+			}
+
+		} catch ( Exception e ) {
+			e.printStackTrace();
+		}
+		
+		command = "zfec " + time + ".tmp -m " + dist + " -k " + required + " -p " + file_name + " -d " + path + "/";
+		System.out.println(command);
+
+		try {
+			Process p = Runtime.getRuntime().exec(command);
+			BufferedReader stdInput = new BufferedReader(new InputStreamReader(p.getInputStream()));
+			BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+			
+			String s = null;
+
+			System.out.println("Here is the standard output of the command:\n");
+			while ((s = stdInput.readLine()) != null) {
+				flag = false;
+				System.out.println(s);
+			}
+
+			// read any errors from the attempted command
+
+			System.out.println("Here is the standard error of the command (if any):\n");
+			while ((s = stdError.readLine()) != null) {
+				flag = false;
+				System.out.println(s);
+			}
+			link.delete();
+		} catch ( Exception e ) {
+			e.printStackTrace();
+		}
+		flag = false;
+		if (flag == false) {
+			System.out.println("FAILED");
+			deleteDir(tempdir);
+		}
+		System.out.println("DONE returning");
+
+		
 	}
+
+	public boolean deleteDir(File dir) {
+		if (dir.isDirectory()) {
+			String[] children = dir.list();
+			for (int i=0; i<children.length; i++) {
+				boolean success = deleteDir(new File(dir, children[i]));
+				if (!success) {
+					return false;
+				}
+			}
+		}
+
+		// The directory is now empty so delete it
+		return dir.delete();
+	}
+
 
 }
