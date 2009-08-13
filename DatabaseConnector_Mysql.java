@@ -643,6 +643,8 @@ public class DatabaseConnector_Mysql {
 				psno.setUUID(rs.getString("uuid"));
 				psno.setRequestedPath(rs.getString("requested_path"));
 				psno.setACL(rs.getString("acl"));
+				psno.setPSNDistribution(rs.getInt("psn_distribution"));
+				psno.setPSNResiliance(rs.getInt("psn_resiliance"));
 				if (rs.getInt("local_copy") == 1) {
 					psno.setLocalCopy(true);
 				} else {

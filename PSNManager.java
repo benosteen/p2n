@@ -42,7 +42,6 @@ public class PSNManager {
 	}
 
 	public void updateNetworkConfig() {
-		System.out.println("TEST: " + settings.get("test"));
 		Vector vec = (Vector)settings.get("node");
 		Keypair kp = dbm.getNetworkKeypair();
 		System.out.println("NUMBER OF NODES: " + vec.size());
@@ -154,8 +153,19 @@ public class PSNManager {
 		}
 		
 		PSNManager psn_man = new PSNManager(conf_file);
-		psn_man.updateLocalInfo();
-		psn_man.updateNetworkConfig();
+
+		while (true) {
+			
+			psn_man.updateLocalInfo();
+			psn_man.updateNetworkConfig();
+
+			try {
+				Thread.sleep(600000);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+		}
 	}
 
 
