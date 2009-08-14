@@ -72,6 +72,21 @@ public class DatabaseConnector_Mysql {
 	}
 	
 
+	public int getNodeCount() {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT count(*) as total from nodes where last_handshake > UNIX_TIMESTAMP()-1800");
+			ResultSet rs = pstmt.executeQuery();
+			rs.first();
+			int size = rs.getInt("total");
+			disconnectMysql(con);
+			return size;
+		} catch (Exception e) {
+			return 0;
+		}
+		
+	}
+
 	public String get_uuid_from_request(String access_id,String requested_path) {
 		Connection con;
 		ResultSet rs;
@@ -81,13 +96,13 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(1,access_id);
 			pstmt.setString(2,requested_path);
 			rs = pstmt.executeQuery();
+			disconnectMysql(con);
 		} catch (Exception e) {
 			return "500";
 		} 
 		try {
 			rs.first();
 			String key = rs.getString("uuid");
-			disconnectMysql(con);
 			return key;
 		} catch (Exception e) {
 			return "404";
@@ -276,6 +291,7 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(3,uuid);
 			pstmt.setString(4,acl);
 			pstmt.execute();
+			disconnectMysql(con);
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -292,6 +308,7 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(2,outkey);
 			pstmt.setString(3,value);
 			pstmt.execute();
+			disconnectMysql(con);
 		} catch (Exception e) {
 			e.printStackTrace();
 		} 
@@ -303,6 +320,7 @@ public class DatabaseConnector_Mysql {
 			PreparedStatement pstmt = con.prepareStatement("UPDATE mappings set local_copy=0 where uuid=?;");
 			pstmt.setString(1,uuid);
 			pstmt.execute();
+			disconnectMysql(con);
 		} catch (Exception e) {
 			e.printStackTrace();
 		} 
@@ -314,6 +332,20 @@ public class DatabaseConnector_Mysql {
 			PreparedStatement pstmt = con.prepareStatement("UPDATE mappings set psn_copy=0 where uuid=?;");
 			pstmt.setString(1,uuid);
 			pstmt.execute();
+			disconnectMysql(con);
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		} 
+	}
+	
+	public void set_p2n_copy(String uuid) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("UPDATE mappings set psn_copy=1 where uuid=?;");
+			pstmt.setString(1,uuid);
+			pstmt.execute();
+			disconnectMysql(con);
 		} catch (Exception e) {
 			e.printStackTrace();
 		} 
@@ -338,12 +370,12 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(1,uuid);
 			pstmt.execute();
 			con.commit();
-			con.close();
+			disconnectMysql(con);
 			return true;
 		} catch (Exception e) {
 			con.rollback();
 			e.printStackTrace();
-			con.close();
+			disconnectMysql(con);
 			return false;
 		} 
 		
@@ -374,11 +406,11 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(3,node_id);
 			pstmt.execute();
 			con.commit();
-			con.close();
+			disconnectMysql(con);
 			return 100;
 		} catch (Exception e) {
 			con.rollback();
-			con.close();
+			disconnectMysql(con);
 			e.printStackTrace();
 			return 500;
 		} 
@@ -402,15 +434,70 @@ public class DatabaseConnector_Mysql {
 
 	}
 
-	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String psndis, String psnres) {
+	public boolean insert_remote_file_data(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String owner) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?;");
+			
+			PreparedStatement pstmt = con.prepareStatement("SELECT count(*) as total from files where mapping_uuid=? and path=? and md5_sum=? and mime_type=? and type=? and owner=?;");
 			pstmt.setString(1,uuid);
 			pstmt.setString(2,store_path);
 			pstmt.setString(3,md5);
 			pstmt.setString(4,mime_type);
 			pstmt.setString(5,type);
+			pstmt.setString(6,owner);
+			ResultSet rs = pstmt.executeQuery();
+			int size = 0;
+			try {
+				rs.first();
+				size = rs.getInt("total");
+			} catch (Exception e) {}
+			if (size < 1) {
+
+				pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?;");
+				pstmt.setString(1,uuid);
+				pstmt.setString(2,store_path);
+				pstmt.setString(3,md5);
+				pstmt.setString(4,mime_type);
+				pstmt.setString(5,type);
+				pstmt.setString(6,owner);
+				pstmt.execute();
+			}
+
+			PreparedStatement pstmt2 = con.prepareStatement("SELECT count(*) as total from node_files where node_id=? and mapping_uuid=? and type=?;");
+			pstmt2.setString(1,node_id);
+			pstmt2.setString(2,uuid);
+			pstmt2.setString(3,type);
+			rs = pstmt2.executeQuery();
+			size = 0;
+			try {
+				rs.first();
+				size = rs.getInt("total");
+			} catch (Exception e) {}
+			if (size < 1) {
+				pstmt2 = con.prepareStatement("INSERT INTO node_files set node_id=?,mapping_uuid=?,type=?;");
+				pstmt2.setString(1,node_id);
+				pstmt2.setString(2,uuid);
+				pstmt2.setString(3,type);
+				pstmt2.execute();
+			}
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		} 
+		
+	}
+	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String psndis, String psnres, String owner) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?;");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,store_path);
+			pstmt.setString(3,md5);
+			pstmt.setString(4,mime_type);
+			pstmt.setString(5,type);
+			pstmt.setString(6,owner);
 			PreparedStatement pstmt2 = con.prepareStatement("INSERT INTO node_files set node_id=?,mapping_uuid=?,type=?;");
 			pstmt2.setString(1,node_id);
 			pstmt2.setString(2,uuid);
@@ -427,6 +514,7 @@ public class DatabaseConnector_Mysql {
 			pstmt.execute();
 			pstmt2.execute();
 			pstmt3.execute();
+			disconnectMysql(con);
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -514,6 +602,7 @@ public class DatabaseConnector_Mysql {
 			ResultSet rs = pstmt.executeQuery();
 			rs.next();
 			Keypair kp = new Keypair(rs.getString("access_id"),rs.getString("private_key"));
+			disconnectMysql(con);
 			return kp;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -607,6 +696,7 @@ public class DatabaseConnector_Mysql {
 			} catch (Exception e) {
 			}
 			ht.put("PSNCopy",psn);
+			disconnectMysql(con);
 			return ht;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -624,6 +714,7 @@ public class DatabaseConnector_Mysql {
 			while (rs.next()) {
 				vec.add(rs.getString("uuid"));
 			}
+			disconnectMysql(con);
 			return vec;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -641,6 +732,7 @@ public class DatabaseConnector_Mysql {
 			PSNObject psno = new PSNObject();	
 			if (rs.next()) {
 				psno.setUUID(rs.getString("uuid"));
+				psno.setAccessId(rs.getString("access_id"));
 				psno.setRequestedPath(rs.getString("requested_path"));
 				psno.setACL(rs.getString("acl"));
 				psno.setPSNDistribution(rs.getInt("psn_distribution"));
@@ -665,6 +757,7 @@ public class DatabaseConnector_Mysql {
 					psno.setMimeType(rs2.getString("mime_type"));
 				}
 			}
+			disconnectMysql(con);
 			return psno;
 		} catch (Exception e) {
 			e.printStackTrace();
