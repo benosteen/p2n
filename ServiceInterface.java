@@ -810,6 +810,24 @@ public int authorize_request() 	{
 			boolean success = nch.associate_remote_node(settings,remote_node_settings,dbm);
 			if (success) {
 				nch.update_settings_from_db(settings,dbm);
+				Vector pre = (Vector)remote_node_settings.get("node");
+				Vector vec = (Vector)settings.get("node");
+				for (int i=0;i<pre.size();i++) {
+					boolean vecdone = false;
+					PSNNode prenode = (PSNNode)pre.get(i);
+					String prenode_url = prenode.get_node_url();
+					for (int j=0;j<vec.size();j++) {
+						PSNNode vecnode = (PSNNode)vec.get(j);
+						String vecnode_url = vecnode.get_node_url();
+						if (vecnode_url.equals(prenode_url)) {
+							vecdone = true;
+						}
+					}
+					if (!vecdone) {
+						vec.add(prenode);
+					}
+				}
+				settings.put("node",vec);
 				PSNManager psn_man = new PSNManager(settings);
 				psn_man.updateNetworkConfig();
 				System.out.println("DONE?");
