@@ -130,18 +130,33 @@ class PSNDistributor implements Runnable {
 		int todo = children.length;
 		int done = 0;
 
+		Vector nodes_done = new Vector();
+
 		for (int i=0;i<children.length;i++) {	
 			String in_file_path = path + "/" + children[i];
 			System.out.println("Distribute " + uuid + " file " + in_file_path);
-			HTTP_Response httpres = psn_con.perform_put(settings,"nile.ecs.soton.ac.uk:8452", in_file_path, "application/zfec", access_id+"/"+uuid+"/"+children[i] , kp);
-			if (httpres == null) {
-				System.out.println("FAILED NULL");
-			} else if (httpres.getErrorCode() > 399) {
-				System.out.println("FAILED with " + httpres.getErrorCode());
-				System.out.println(httpres.getBody());
+
+			PSNNodeSelector psnns = new PSNNodeSelector(dbm);
+
+			PSNNode node = psnns.getNode(nodes_done);
+			if (node == null) {
+				flag = false;
+				break;
 			} else {
-				System.out.println("SUCCESS " + httpres.getErrorCode());
-				done++;
+				nodes_done.add(node);
+				String node_url = node.get_node_url(); 
+
+				HTTP_Response httpres = psn_con.perform_put(settings,node_url, in_file_path, "application/zfec", access_id+"/"+uuid+"/"+children[i] , kp);
+				if (httpres == null) {
+					System.out.println("FAILED NULL");
+				} else if (httpres.getErrorCode() > 399) {
+					System.out.println("FAILED with " + httpres.getErrorCode());
+					System.out.println(httpres.getBody());
+				} else {
+					boolean db_update = dbm.record_remote_file(node.get_node_id(),uuid,"remote");
+					System.out.println("SUCCESS " + httpres.getErrorCode());
+					done++;
+				}
 			}
 		}
 		if (done == todo) {

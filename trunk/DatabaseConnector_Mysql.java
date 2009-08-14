@@ -86,6 +86,28 @@ public class DatabaseConnector_Mysql {
 		}
 		
 	}
+	
+	public Vector getActiveNodes() {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT * from nodes where last_handshake > UNIX_TIMESTAMP()-1800");
+			ResultSet rs = pstmt.executeQuery();
+			Vector nodes = new Vector();
+			while (rs.next()) {
+				PSNNode node = new PSNNode(rs.getString("url"));
+				node.set_node_id(rs.getString("id"));
+				node.set_url_base(rs.getString("url_base"));
+				node.set_allocated_space(rs.getInt("allocated_space"));
+				node.set_last_handshake(rs.getInt("last_handshake"));
+				nodes.add(node);
+			}
+			disconnectMysql(con);
+			return nodes;
+		} catch (Exception e) {
+			return null;
+		}
+		
+	}
 
 	public String get_uuid_from_request(String access_id,String requested_path) {
 		Connection con;
@@ -462,13 +484,25 @@ public class DatabaseConnector_Mysql {
 				pstmt.setString(6,owner);
 				pstmt.execute();
 			}
-
+			disconnectMysql(con);
+			boolean state = record_remote_file(node_id,uuid,type);
+			return state;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		} 
+	}
+	
+	public boolean record_remote_file(String node_id, String uuid, String type) {
+		try {
+			Connection con = connectMysql();
+			
 			PreparedStatement pstmt2 = con.prepareStatement("SELECT count(*) as total from node_files where node_id=? and mapping_uuid=? and type=?;");
 			pstmt2.setString(1,node_id);
 			pstmt2.setString(2,uuid);
 			pstmt2.setString(3,type);
-			rs = pstmt2.executeQuery();
-			size = 0;
+			ResultSet rs = pstmt2.executeQuery();
+			int size = 0;
 			try {
 				rs.first();
 				size = rs.getInt("total");
@@ -488,6 +522,7 @@ public class DatabaseConnector_Mysql {
 		} 
 		
 	}
+
 	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String psndis, String psnres, String owner) {
 		try {
 			Connection con = connectMysql();
