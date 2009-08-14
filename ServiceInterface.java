@@ -594,7 +594,6 @@ public int authorize_request() 	{
 	public int put_bitstream(InputStream in, BufferedWriter log_writer) {
 		String access_id = (String)request_ht.get("access_id");
 		String network_access_id = get_settings_value("network_access_id");
-		System.out.println("GOT HERE hjsdfklfhdjkshfjksdhfjkdshfjksdhjkfhsdjkhk");
 		if (access_id.equals(network_access_id)) {
 			return put_p2n_bitstream(in,log_writer);
 		} else {
