@@ -42,8 +42,24 @@ public class PSNManager {
 	}
 
 	public void updateNetworkConfig() {
+		Vector pre = (Vector)settings.get("node");
 		settings = nch.update_settings_from_db(settings,dbm);
 		Vector vec = (Vector)settings.get("node");
+		for (int i=0;i<pre.size();i++) {
+			boolean vecdone = false;
+			PSNNode prenode = (PSNNode)pre.get(i);
+			String prenode_url = prenode.get_node_url();
+			for (int j=0;j<vec.size();j++) {
+				PSNNode vecnode = (PSNNode)vec.get(j);
+				String vecnode_url = vecnode.get_node_url();
+				if (vecnode_url.equals(prenode_url)) {
+					vecdone = true;
+				}
+			}
+			if (!vecdone) {
+				vec.add(prenode);
+			}
+		}
 		Keypair kp = dbm.getNetworkKeypair();
 		try {
 			int size = vec.size();
@@ -117,7 +133,7 @@ public class PSNManager {
 		String network_access_id = get_settings_value("network_access_id");
 		String network_private_key = get_settings_value("network_private_key");
 		boolean done = dbm.register_network_key(network_access_id,network_private_key);
-		
+	
 		if (!done) {
 			System.out.println("FAILED to register network keys");
 			System.exit(0);
