@@ -41,7 +41,7 @@ class PSNFunctions {
 		return ((cal.getTime().getTime())/1000);
 	}
 
-	private String get_requested_path(Hashtable request_ht,Hashtable settings) {
+	public String get_requested_path(Hashtable request_ht,Hashtable settings) {
 		NodeConfigurationHandler nch = new NodeConfigurationHandler();
 		String url_base = nch.get_settings_value(settings,"url_base");
 		String node_url = nch.get_settings_value(settings,"node_url");
@@ -83,6 +83,26 @@ class PSNFunctions {
 		} else {
 			return uri;
 		}
+	}
+	
+	public String get_md5(File path) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("MD5");
+			File f = path;
+			InputStream is = new FileInputStream(f);				
+			byte[] buffer = new byte[8192];
+			int read = 0;
+			while( (read = is.read(buffer)) > 0) {
+				digest.update(buffer, 0, read);
+			}		
+			byte[] md5sum = digest.digest();
+			BigInteger bigInt = new BigInteger(1, md5sum);
+			String output = bigInt.toString(16);
+			return output;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return "";
 	}
 
 	public String getStringToSign(Hashtable request_ht, Hashtable settings) {

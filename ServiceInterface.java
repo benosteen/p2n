@@ -592,12 +592,101 @@ public int authorize_request() 	{
 	}
 
 	public int put_bitstream(InputStream in, BufferedWriter log_writer) {
+		String access_id = (String)request_ht.get("access_id");
+		String network_access_id = get_settings_value("network_access_id");
+		System.out.println("GOT HERE hjsdfklfhdjkshfjksdhfjkdshfjksdhjkfhsdjkhk");
+		if (access_id.equals(network_access_id)) {
+			return put_p2n_bitstream(in,log_writer);
+		} else {
+			return put_local_bitstream(in,log_writer);
+		}
+	}
+
+	public int put_p2n_bitstream(InputStream in, BufferedWriter log_writer) {
+		PSNFunctions psnf = new PSNFunctions();
+		String requested_path = psnf.get_requested_path(request_ht,settings);
+		String[] path_bits = requested_path.split("/");
+		String in_access_id = path_bits[0];
+		String in_uuid = path_bits[1];
+		String in_file_name = path_bits[2];
+		String dir_path = base_path + "remote/" + in_access_id + "/" + in_uuid; 
+		String put_path = dir_path + "/" + in_file_name;
+		System.out.println("Local Dirs: " + dir_path);
+		System.out.println("Put Path: " + put_path);
+
+		Boolean success = false;
+		File store_path = new File(dir_path);
+		if (!store_path.exists()) {
+			try {
+				success = store_path.mkdirs();
+			} catch (Exception e) {
+				message = "Could not create file path";
+				return 500;
+			}
+			if (success == false) {
+				message = "Could not create file path";
+				return 500;
+			}
+		}
+
+		store_path = new File(put_path);
+		int http_code = read_bitstream(in,store_path);
+		if (http_code != 200) {
+			store_path = new File(put_path);
+			store_path.delete();
+			store_path = new File(dir_path);
+			String[] children = store_path.list();
+			if (children.length < 1) {
+				store_path.delete();
+			}
+			return http_code;
+		} else {
+			//REALLY NEED TO ERROR HANDLE HERE
+			String psndis = (String)request_ht.get(namespace_prefix + "-meta-psndistribution");
+			String psnres = (String)request_ht.get(namespace_prefix + "-meta-psnresiliance");
+			success = dbm.insert_remote_file_data(in_uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"remote",node_id,in_access_id);
+
+			Enumeration keys = request_ht.keys();
+			while ( keys.hasMoreElements() )
+			{
+				String key = (String)keys.nextElement();
+				String lkey = key.toLowerCase();
+				try {
+					if (lkey.substring(0,namespace_prefix.length()+5).equals(namespace_prefix + "-meta")) {
+						String outkey = key.substring(namespace_prefix.length()+6,key.length());
+						dbm.write_metadata(in_uuid,outkey,(String)request_ht.get(key));
+					}
+				} catch (Exception e) {}
+			}
+			if (success) {
+				return 200;
+			} else {
+				store_path = new File(put_path);
+				store_path.delete();
+				store_path = new File(dir_path);
+				String[] children = store_path.list();
+				if (children.length < 1) {
+					store_path.delete();
+				}
+				try {
+					http_code = dbm.delete_uuid_mapping(in_uuid,"remote",put_path,node_id);
+				} catch (Exception e) {
+					message = "Failed to update final locations of file, aborting";
+					return 500;
+				}
+				return http_code;
+			}
+		}
+	}
+
+	public int put_local_bitstream(InputStream in, BufferedWriter log_writer) {
 		int status = check_bucket();
 		if (status != 200) {
 			return status;
 		}
 		String requested_path = get_requested_path();
 		String access_id = (String)request_ht.get("access_id");
+		
 		String uuid = dbm.get_uuid_from_request(access_id,requested_path);
 		if (uuid.equals("500")) {
 			message = "Failed to fetch indexes.";
@@ -645,7 +734,7 @@ public int authorize_request() 	{
 				//REALLY NEED TO ERROR HANDLE HERE
 				String psndis = (String)request_ht.get(namespace_prefix + "-meta-psndistribution");
 				String psnres = (String)request_ht.get(namespace_prefix + "-meta-psnresiliance");
-				success = dbm.update_file_cache(uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"local",node_id,psndis,psnres);
+				success = dbm.update_file_cache(uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"local",node_id,psndis,psnres,access_id);
 
 				Enumeration keys = request_ht.keys();
 				while ( keys.hasMoreElements() )

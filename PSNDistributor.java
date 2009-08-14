@@ -42,9 +42,10 @@ class PSNDistributor implements Runnable {
 		if (dist < 1) {
 			return;
 		}
+
 /*
 		if (dist > dbm.getNodeCount()) {
-			System.out.println("LOG: Not enough nodes available to perform required distribution");
+			System.out.println("LOG: Not enough nodes available to perform required distribution (" + dbm.getNodeCount() +")");
 			System.out.println("At this point you should reduce the distrubution and distribute the object in this way until the desired distribution is available, or you should refuse the object earlier.");
 			return;
 		}
@@ -114,14 +115,45 @@ class PSNDistributor implements Runnable {
 		} catch ( Exception e ) {
 			e.printStackTrace();
 		}
-		
-		if (flag == false) {
-			System.out.println("FAILED");
-			deleteDir(tempdir);
-		}
-	
-		Vector done_nodes = new Vector();
 
+		
+
+		String access_id = psno.getAccessId();
+		String[] children = tempdir.list();
+		PSNClient psn_con = new PSNClient();
+
+		String network_access_id = nch.get_settings_value(settings,"network_access_id");
+		String network_private_key = nch.get_settings_value(settings,"network_private_key");
+
+		Keypair kp = new Keypair(network_access_id,network_private_key);
+
+		int todo = children.length;
+		int done = 0;
+
+		for (int i=0;i<children.length;i++) {	
+			String in_file_path = path + "/" + children[i];
+			System.out.println("Distribute " + uuid + " file " + in_file_path);
+			HTTP_Response httpres = psn_con.perform_put(settings,"nile.ecs.soton.ac.uk:8452", in_file_path, "application/zfec", access_id+"/"+uuid+"/"+children[i] , kp);
+			if (httpres == null) {
+				System.out.println("FAILED NULL");
+			} else if (httpres.getErrorCode() > 399) {
+				System.out.println("FAILED with " + httpres.getErrorCode());
+				System.out.println(httpres.getBody());
+			} else {
+				System.out.println("SUCCESS " + httpres.getErrorCode());
+				done++;
+			}
+		}
+		if (done == todo) {
+			flag = true;
+			dbm.set_p2n_copy(uuid);
+		} else {
+			flag = false;		
+			System.out.println("FAILED");
+		}
+		
+		deleteDir(tempdir);
+	
 		System.out.println("DONE returning");
 
 			

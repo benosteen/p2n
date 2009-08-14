@@ -1,5 +1,6 @@
 class PSNObject {
-	
+
+	String access_id = null;	
 	String requested_path = null;
 	String uuid = null;
 	boolean local_copy = false;
@@ -20,6 +21,14 @@ class PSNObject {
 
 	public String getUUID() {
 		return uuid;
+	}
+
+	public void setAccessId(String access_id) {
+		this.access_id = access_id;
+	}
+	
+	public String getAccessId() {
+		return access_id;
 	}
 
 	public void setRequestedPath(String requested_path) {
