@@ -173,6 +173,76 @@ class PSNClient {
 	}
 
 
+	public HTTP_Response perform_delete(Hashtable settings, String node_url, String uri, Keypair kp) {
+		PSNFunctions psnf = new PSNFunctions();
+		
+		setupSocket(node_url);
+		
+		Hashtable request_ht = new Hashtable();
+		
+		String host = "";
+		if (node_url.indexOf(":") > -1) {
+			host = node_url.substring(0,node_url.indexOf(":"));
+		} else {
+			host = node_url;
+		}
+	
+		request_ht.put("type","DELETE");
+		request_ht.put("host",host);
+		request_ht.put("date",psnf.getDateTime());
+		request_ht.put("uri",uri);
+		
+		String string_to_sign = psnf.getStringToSign(request_ht,settings);
+
+		OutputStream out;
+		InputStream in;
+		String signature = "";
+
+		try {
+			signature = psnf.calculateRFC2104HMAC(string_to_sign, kp.get_private_key());
+	
+			request_ht.put("authorization","AWS " + kp.get_access_id() + ":" + signature);
+				
+			out = client.getOutputStream();
+	
+			in = client.getInputStream();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+
+		PrintStream psout = new PrintStream(out);
+		psout.println("DELETE " + uri + " HTTP/1.1");
+		psout.println("Host: " + host);
+		psout.println("Date: " + (String)request_ht.get("date"));
+		psout.println("Authorization: " + request_ht.get("authorization"));
+		psout.println("");
+
+		Vector input_lines = read_lines(in);
+		
+		Hashtable response_ht = process_input(input_lines);
+		try {		
+
+			response_ht = process_input(input_lines);
+			HTTP_Response res = new HTTP_Response(Integer.parseInt((String)response_ht.get("code")));
+			int clength = 0;
+			try {
+				clength = Integer.parseInt((String)response_ht.get("content-length"));
+			} catch (Exception e) {
+			}
+			if (clength > 0 ) {
+				String response_body = read_bitstream(in,clength);
+				res.setBody(response_body);
+			}
+			return res;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+
+	}
+
+
 	public HTTP_Response perform_put(Hashtable settings, String node_url, String file_path, String mime_type, String uri, Keypair kp) {
 		PSNFunctions psnf = new PSNFunctions();
 		
