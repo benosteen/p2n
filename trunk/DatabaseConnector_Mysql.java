@@ -96,17 +96,19 @@ public class DatabaseConnector_Mysql {
 		try {
 			Connection con = connectMysql();
 			Vector ret = new Vector();
-			PreparedStatement pstmt = con.prepareStatement("SELECT path from files where node_id=? and uuid=?;");
+			PreparedStatement pstmt = con.prepareStatement("SELECT path from files where node_id=? and mapping_uuid=?;");
 			pstmt.setString(1,node_id);
 			pstmt.setString(2,uuid);
 			ResultSet rs = pstmt.executeQuery();
 			while (rs.next()) {
-				String path = rs.getString("path");
+				System.out.println("GOT A RESULT = " + (String)rs.getString("path"));
+				String path = (String)rs.getString("path");
 				ret.add(path);
 			}
 			disconnectMysql(con);
 			return ret;
 		} catch (Exception e) {
+			e.printStackTrace();
 			return null;
 		}
 	}
@@ -618,7 +620,7 @@ public class DatabaseConnector_Mysql {
 			pstmt2.setString(1,node_id);
 			pstmt2.setString(2,uuid);
 			pstmt2.setString(3,type);
-			pstmt2.executeQuery();
+			pstmt2.execute();
 			disconnectMysql(con);
 			return true;
 		} catch (Exception e) {
@@ -704,7 +706,7 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(1,uuid);
 			ResultSet rs = pstmt.executeQuery();
 			rs.first();
-			int lc = rs.getInt("local_copy");
+			int lc = rs.getInt("psn_copy");
 			disconnectMysql(con);
 			if (lc > 0) {
 				return true;

@@ -606,6 +606,7 @@ public int authorize_request() 	{
 				PSNNode hosting_node = (PSNNode)hosting_nodes.get(i);
 				if (hosting_node.get_node_id() != node_id) {
 					Vector uris = dbm.getRemoteNodeURIs(hosting_node.get_node_id(),uuid);
+					System.out.println(uris.size() + ": ASKING FOR path for node " + hosting_node.get_node_id() + " and uuid " + uuid);
 					for (int j=0;j<uris.size();j++) {
 						String uri = (String)uris.get(j);
 						HTTP_Response res = psn_con.perform_delete(settings,hosting_node.get_node_url(),uri,kp);
