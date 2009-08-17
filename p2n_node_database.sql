@@ -38,6 +38,7 @@ SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
 CREATE TABLE `files` (
   `mapping_uuid` varchar(255) default NULL,
+  `node_id` varchar(255) default NULL,
   `path` blob,
   `md5_sum` varchar(255) default NULL,
   `type` varchar(255) default NULL,
@@ -148,4 +149,4 @@ SET character_set_client = @saved_cs_client;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-14 13:55:26
+-- Dump completed on 2009-08-17 15:37:25
