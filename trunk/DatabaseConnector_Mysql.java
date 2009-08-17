@@ -51,6 +51,7 @@ public class DatabaseConnector_Mysql {
 				return 200;
 			}
 		} catch (Exception e) {
+			e.printStackTrace();
 			return 500;
 		}
 	}
@@ -546,6 +547,7 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(3,type);
 			pstmt.setString(4,owner);
 			pstmt.setString(5,node_id);
+			System.out.println("DELETE from files where mapping_uuid="+uuid+" and path="+store_path+" and type="+type+" and owner="+owner+" and node_id="+node_id+";");
 			boolean state = pstmt.execute();
 			
 			disconnectMysql(con);
