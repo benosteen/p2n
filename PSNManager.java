@@ -45,20 +45,23 @@ public class PSNManager {
 		Vector pre = (Vector)settings.get("node");
 		settings = nch.update_settings_from_db(settings,dbm);
 		Vector vec = (Vector)settings.get("node");
-		for (int i=0;i<pre.size();i++) {
-			boolean vecdone = false;
-			PSNNode prenode = (PSNNode)pre.get(i);
-			String prenode_url = prenode.get_node_url();
-			for (int j=0;j<vec.size();j++) {
-				PSNNode vecnode = (PSNNode)vec.get(j);
-				String vecnode_url = vecnode.get_node_url();
-				if (vecnode_url.equals(prenode_url)) {
-					vecdone = true;
+		try {
+			for (int i=0;i<pre.size();i++) {
+				boolean vecdone = false;
+				PSNNode prenode = (PSNNode)pre.get(i);
+				String prenode_url = prenode.get_node_url();
+				for (int j=0;j<vec.size();j++) {
+					PSNNode vecnode = (PSNNode)vec.get(j);
+					String vecnode_url = vecnode.get_node_url();
+					if (vecnode_url.equals(prenode_url)) {
+						vecdone = true;
+					}
+				}
+				if (!vecdone) {
+					vec.add(prenode);
 				}
 			}
-			if (!vecdone) {
-				vec.add(prenode);
-			}
+		} catch (Exception e) {
 		}
 		Keypair kp = dbm.getNetworkKeypair();
 		try {
