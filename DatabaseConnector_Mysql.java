@@ -536,20 +536,17 @@ public class DatabaseConnector_Mysql {
 		} 
 	}
 	
-	public boolean delete_remote_file_data(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String owner) {
+	public boolean delete_remote_file_data(String uuid,String store_path,String type,String node_id, String owner) {
 		try {
 			Connection con = connectMysql();
 			
-			PreparedStatement pstmt = con.prepareStatement("DELETE from files where mapping_uuid=? and path=? and md5_sum=? and mime_type=? and type=? and owner=? and node_id=?;");
+			PreparedStatement pstmt = con.prepareStatement("DELETE from files where mapping_uuid=? and path=? and type=? and owner=? and node_id=?;");
 			pstmt.setString(1,uuid);
 			pstmt.setString(2,store_path);
-			pstmt.setString(3,md5);
-			pstmt.setString(4,mime_type);
-			pstmt.setString(5,type);
-			pstmt.setString(6,owner);
-			pstmt.setString(7,node_id);
+			pstmt.setString(3,type);
+			pstmt.setString(4,owner);
+			pstmt.setString(5,node_id);
 			boolean state = pstmt.execute();
-			System.out.println("DELETE from files where mapping_uuid=" + uuid + " and path=" + store_path + " and md5_sum=" + md5 + " and mime_type=" + mime_type + " and type=" + type + " and owner=" + owner + " and node_id=" + node_id);
 			
 			disconnectMysql(con);
 			state = delete_remote_file(node_id,uuid,type);
