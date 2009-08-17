@@ -548,10 +548,11 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(5,type);
 			pstmt.setString(6,owner);
 			pstmt.setString(7,node_id);
-			pstmt.execute();
+			boolean state = pstmt.execute();
+			System.out.println("DELETE from files where mapping_uuid=" + uuid + " and path=" + store_path + " and md5_sum=" + md5 + " and mime_type=" + mime_type + " and type=" + type + " and owner=" + owner + " and node_id=" + node_id);
 			
 			disconnectMysql(con);
-			boolean state = delete_remote_file(node_id,uuid,type);
+			state = delete_remote_file(node_id,uuid,type);
 			state = delete_related_metadata_if_orphaned(uuid);
 			return state;
 		} catch (Exception e) {
