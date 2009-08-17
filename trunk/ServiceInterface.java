@@ -568,7 +568,7 @@ public int authorize_request() 	{
 			return 500;
 		} 
 			//REALLY NEED TO ERROR HANDLE HERE
-		success = dbm.delete_remote_file_data(in_uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"remote",node_id,in_access_id);
+		success = dbm.delete_remote_file_data(in_uuid,store_path.toString(),"remote",node_id,in_access_id);
 
 		if (!success) {
 			message = "Unable to remove metadata";
