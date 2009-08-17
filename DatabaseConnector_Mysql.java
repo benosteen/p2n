@@ -70,7 +70,46 @@ public class DatabaseConnector_Mysql {
 		}
 
 	}
+
+	public Vector getRemoteNodesHostingUUID(String uuid) {
+		try {
+			Connection con = connectMysql();
+			Vector ret = new Vector();
+			PreparedStatement pstmt = con.prepareStatement("select nodes.id,nodes.url from nodes inner join node_files on node_files.node_id=nodes.id where node_files.mapping_uuid=? and node_files.type=?;");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,"remote");
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				PSNNode node = new PSNNode((String)rs.getString("url"));
+				node.set_node_id((String)rs.getString("id"));
+				ret.add(node);
+			}
+			disconnectMysql(con);
+			return ret;
+		} catch (Exception e) {
+			return null;
+		}
+		
+	}
 	
+	public Vector getRemoteNodeURIs(String node_id,String uuid) {
+		try {
+			Connection con = connectMysql();
+			Vector ret = new Vector();
+			PreparedStatement pstmt = con.prepareStatement("SELECT path from files where node_id=? and uuid=?;");
+			pstmt.setString(1,node_id);
+			pstmt.setString(2,uuid);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				String path = rs.getString("path");
+				ret.add(path);
+			}
+			disconnectMysql(con);
+			return ret;
+		} catch (Exception e) {
+			return null;
+		}
+	}
 
 	public int getNodeCount() {
 		try {
@@ -460,13 +499,14 @@ public class DatabaseConnector_Mysql {
 		try {
 			Connection con = connectMysql();
 			
-			PreparedStatement pstmt = con.prepareStatement("SELECT count(*) as total from files where mapping_uuid=? and path=? and md5_sum=? and mime_type=? and type=? and owner=?;");
+			PreparedStatement pstmt = con.prepareStatement("SELECT count(*) as total from files where mapping_uuid=? and path=? and md5_sum=? and mime_type=? and type=? and owner=? and node_id=?;");
 			pstmt.setString(1,uuid);
 			pstmt.setString(2,store_path);
 			pstmt.setString(3,md5);
 			pstmt.setString(4,mime_type);
 			pstmt.setString(5,type);
 			pstmt.setString(6,owner);
+			pstmt.setString(7,node_id);
 			ResultSet rs = pstmt.executeQuery();
 			int size = 0;
 			try {
@@ -475,13 +515,14 @@ public class DatabaseConnector_Mysql {
 			} catch (Exception e) {}
 			if (size < 1) {
 
-				pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?;");
+				pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?,node_id=?;");
 				pstmt.setString(1,uuid);
 				pstmt.setString(2,store_path);
 				pstmt.setString(3,md5);
 				pstmt.setString(4,mime_type);
 				pstmt.setString(5,type);
 				pstmt.setString(6,owner);
+				pstmt.setString(7,node_id);
 				pstmt.execute();
 			}
 			disconnectMysql(con);
@@ -493,6 +534,52 @@ public class DatabaseConnector_Mysql {
 		} 
 	}
 	
+	public boolean delete_remote_file_data(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String owner) {
+		try {
+			Connection con = connectMysql();
+			
+			PreparedStatement pstmt = con.prepareStatement("DELETE from files where mapping_uuid=? and path=? and md5_sum=? and mime_type=? and type=? and owner=? and node_id=?;");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,store_path);
+			pstmt.setString(3,md5);
+			pstmt.setString(4,mime_type);
+			pstmt.setString(5,type);
+			pstmt.setString(6,owner);
+			pstmt.setString(7,node_id);
+			pstmt.execute();
+			
+			disconnectMysql(con);
+			boolean state = delete_remote_file(node_id,uuid,type);
+			state = delete_related_metadata_if_orphaned(uuid);
+			return state;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		} 
+	}
+	
+	public boolean delete_related_metadata_if_orphaned(String uuid) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select count(*) as total from mappings,node_files,files where mappings.uuid=? or node_files.mapping_uuid=? or files.mapping_uuid=?;");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,uuid);
+			pstmt.setString(3,uuid);
+			ResultSet rs = pstmt.executeQuery();
+			if (rs.getInt("total") < 1) {
+				pstmt = con.prepareStatement("delete from object_metadata where mapping_uuid=?;");
+				pstmt.setString(1,uuid);
+				pstmt.executeQuery();
+			}
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		} 
+		
+	}	
+
 	public boolean record_remote_file(String node_id, String uuid, String type) {
 		try {
 			Connection con = connectMysql();
@@ -522,17 +609,35 @@ public class DatabaseConnector_Mysql {
 		} 
 		
 	}
+	
+	public boolean delete_remote_file(String node_id, String uuid, String type) {
+		try {
+			Connection con = connectMysql();
+			
+			PreparedStatement pstmt2 = con.prepareStatement("DELETE from node_files where node_id=? and mapping_uuid=? and type=?;");
+			pstmt2.setString(1,node_id);
+			pstmt2.setString(2,uuid);
+			pstmt2.setString(3,type);
+			pstmt2.executeQuery();
+			disconnectMysql(con);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		} 	
+	}
 
 	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String psndis, String psnres, String owner) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?;");
+			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?,node_id=?;");
 			pstmt.setString(1,uuid);
 			pstmt.setString(2,store_path);
 			pstmt.setString(3,md5);
 			pstmt.setString(4,mime_type);
 			pstmt.setString(5,type);
 			pstmt.setString(6,owner);
+			pstmt.setString(7,node_id);
 			PreparedStatement pstmt2 = con.prepareStatement("INSERT INTO node_files set node_id=?,mapping_uuid=?,type=?;");
 			pstmt2.setString(1,node_id);
 			pstmt2.setString(2,uuid);

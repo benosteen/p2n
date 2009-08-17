@@ -43,13 +43,12 @@ class PSNDistributor implements Runnable {
 			return;
 		}
 
-/*
 		if (dist > dbm.getNodeCount()) {
 			System.out.println("LOG: Not enough nodes available to perform required distribution (" + dbm.getNodeCount() +")");
 			System.out.println("At this point you should reduce the distrubution and distribute the object in this way until the desired distribution is available, or you should refuse the object earlier.");
 			return;
 		}
-*/		
+		
 		String time = Long.toString(System.nanoTime());
 		String path = nch.get_settings_value(settings,"data_path") + time;
 		String file_name = psno.getLocalPath().substring(psno.getLocalPath().lastIndexOf("/")+1,psno.getLocalPath().length());
@@ -145,15 +144,23 @@ class PSNDistributor implements Runnable {
 			} else {
 				nodes_done.add(node);
 				String node_url = node.get_node_url(); 
+				String node_id = node.get_node_id(); 
+				String store_path = access_id+"/"+uuid+"/"+children[i];
+				String mime_type = "application/zfec";
 
-				HTTP_Response httpres = psn_con.perform_put(settings,node_url, in_file_path, "application/zfec", access_id+"/"+uuid+"/"+children[i] , kp);
+
+				PSNFunctions psnf = new PSNFunctions();
+				File in_file = new File(in_file_path);
+				String md5 = psnf.get_md5(in_file);
+
+				HTTP_Response httpres = psn_con.perform_put(settings,node_url, in_file_path, mime_type, store_path, kp);
 				if (httpres == null) {
 					System.out.println("FAILED NULL");
 				} else if (httpres.getErrorCode() > 399) {
 					System.out.println("FAILED with " + httpres.getErrorCode());
 					System.out.println(httpres.getBody());
 				} else {
-					boolean db_update = dbm.record_remote_file(node.get_node_id(),uuid,"remote");
+					boolean db_update= dbm.insert_remote_file_data(uuid,store_path,md5,mime_type,"remote",node_id,access_id);
 					System.out.println("SUCCESS " + httpres.getErrorCode());
 					done++;
 				}

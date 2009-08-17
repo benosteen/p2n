@@ -528,8 +528,57 @@ public int authorize_request() 	{
 		}
 		
 	}
-
+	
 	public int delete_file(BufferedWriter log_writer) {
+		String access_id = (String)request_ht.get("access_id");
+		String network_access_id = get_settings_value("network_access_id");
+		if (access_id.equals(network_access_id)) {
+			return delete_p2n_file(log_writer);
+		} else {
+			return delete_local_file(log_writer);
+		}
+	}
+
+	public int delete_p2n_file(BufferedWriter log_writer) {
+		PSNFunctions psnf = new PSNFunctions();
+		String requested_path = psnf.get_requested_path(request_ht,settings);
+		String[] path_bits = requested_path.split("/");
+		String in_access_id = path_bits[0];
+		String in_uuid = path_bits[1];
+		String in_file_name = path_bits[2];
+		String dir_path = base_path + "remote/" + in_access_id + "/" + in_uuid; 
+		String put_path = dir_path + "/" + in_file_name;
+		System.out.println("Local Dirs: " + dir_path);
+		System.out.println("Put Path: " + put_path);
+
+		Boolean success = false;
+		File store_path = new File(put_path);
+		success = store_path.delete();
+		if (!success) {
+			message = "Unable to delete file";
+			return 500;
+		} 
+		store_path = new File(dir_path);
+		String[] children = store_path.list();
+		if (children.length < 1) {
+			success = store_path.delete();
+		}
+		if (!success) {
+			message = "Unable to delete file";
+			return 500;
+		} 
+			//REALLY NEED TO ERROR HANDLE HERE
+		success = dbm.delete_remote_file_data(in_uuid,store_path.toString(),(String)request_ht.get("content-md5"),(String)request_ht.get("content-type"),"remote",node_id,in_access_id);
+
+		if (!success) {
+			message = "Unable to remove metadata";
+			return 500;
+		} 
+		return 204;	
+	}
+
+
+	public int delete_local_file(BufferedWriter log_writer) {
 		int status = check_bucket();
 		if (status != 200) {
 			return status;
@@ -542,6 +591,29 @@ public int authorize_request() 	{
 		}
 		boolean success=true;
 		if (dbm.has_psn_copy(uuid)) {
+
+			NodeConfigurationHandler nch = new NodeConfigurationHandler();
+
+			String network_access_id = nch.get_settings_value(settings,"network_access_id");
+			String network_private_key = nch.get_settings_value(settings,"network_private_key");
+
+			Keypair kp = new Keypair(network_access_id,network_private_key);
+
+
+			PSNClient psn_con = new PSNClient();
+			Vector hosting_nodes = dbm.getRemoteNodesHostingUUID(uuid);	
+			for (int i=0;i<hosting_nodes.size();i++) {
+				PSNNode hosting_node = (PSNNode)hosting_nodes.get(i);
+				if (hosting_node.get_node_id() != node_id) {
+					Vector uris = dbm.getRemoteNodeURIs(hosting_node.get_node_id(),uuid);
+					for (int j=0;j<uris.size();j++) {
+						String uri = (String)uris.get(j);
+						HTTP_Response res = psn_con.perform_delete(settings,hosting_node.get_node_url(),uri,kp);
+					}
+				}
+			}
+			
+
 			//DO SOME STUFF WITH THE PSN
 			success=true;
 			if (success) {
