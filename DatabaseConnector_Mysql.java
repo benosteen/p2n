@@ -562,13 +562,24 @@ public class DatabaseConnector_Mysql {
 	
 	public boolean delete_related_metadata_if_orphaned(String uuid) {
 		try {
+			int total = 0;
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("select count(*) as total from mappings,node_files,files where mappings.uuid=? or node_files.mapping_uuid=? or files.mapping_uuid=?;");
+			PreparedStatement pstmt = con.prepareStatement("select count(*) as total from mappings where mappings.uuid=?;");
 			pstmt.setString(1,uuid);
-			pstmt.setString(2,uuid);
-			pstmt.setString(3,uuid);
 			ResultSet rs = pstmt.executeQuery();
-			if (rs.getInt("total") < 1) {
+			rs.next();
+			total += rs.getInt("total");
+			pstmt = con.prepareStatement("select count(*) as total from files where files.mapping_uuid=?;");
+			pstmt.setString(1,uuid);
+			rs = pstmt.executeQuery();
+			rs.next();
+			total += rs.getInt("total");
+			pstmt = con.prepareStatement("select count(*) as total from node_files where node_files.mapping_uuid=?;");
+			pstmt.setString(1,uuid);
+			rs = pstmt.executeQuery();
+			rs.next();
+			total += rs.getInt("total");
+			if (total < 1) {
 				pstmt = con.prepareStatement("delete from object_metadata where mapping_uuid=?;");
 				pstmt.setString(1,uuid);
 				pstmt.executeQuery();
