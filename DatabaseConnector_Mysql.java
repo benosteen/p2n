@@ -581,7 +581,7 @@ public class DatabaseConnector_Mysql {
 			if (total < 1) {
 				pstmt = con.prepareStatement("delete from object_metadata where mapping_uuid=?;");
 				pstmt.setString(1,uuid);
-				pstmt.executeQuery();
+				pstmt.execute();
 			}
 			disconnectMysql(con);
 			return true;
