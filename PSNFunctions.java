@@ -163,9 +163,9 @@ class PSNFunctions {
 
 			String requested_path = get_requested_path(request_ht,settings);
 			string_to_sign += requested_path;
-			System.out.println("======");
-			System.out.println(string_to_sign);
-			System.out.println("======");
+			//System.out.println("======");
+			//System.out.println(string_to_sign);
+			//System.out.println("======");
 			return string_to_sign;
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -110,7 +110,7 @@ class NodeConfigurationHandler {
 					}
 				} finally {
 					if (value != null) {
-						System.out.println(key + " = " + value);
+						//System.out.println(key + " = " + value);
 						elem = (Element) doc.createElement(key);
 						elem.appendChild( doc.createTextNode(value) );
 						root.appendChild(elem);
