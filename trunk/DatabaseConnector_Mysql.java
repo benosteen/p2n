@@ -798,7 +798,6 @@ public class DatabaseConnector_Mysql {
 			while (rs.next()) {
 				PSNNode node = new PSNNode(rs.getString("url"));
 				node.set_node_id(rs.getString("id"));
-				System.out.println("JUST SET NODE ID OF " +  rs.getString("url") + " to " + node.get_node_id());
 				node.set_url_base(rs.getString("url_base"));
 				node.set_allocated_space(rs.getInt("allocated_space"));
 				node.set_last_handshake(rs.getInt("last_handshake"));
