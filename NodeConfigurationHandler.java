@@ -229,7 +229,7 @@ class NodeConfigurationHandler {
 	public boolean check_local_node_settings(Hashtable settings, DatabaseConnector_Mysql dbm) {
 		dbm.setCredentials(get_settings_value(settings,"database_host"),get_settings_value(settings,"database_name"),get_settings_value(settings,"database_user"),get_settings_value(settings,"database_pass"));
 	
-		dbm.clearNodeHandshakes();	
+		//dbm.clearNodeHandshakes();	
 		String local_node_id = get_settings_value(settings,"node_id");
 		String local_node_url = get_settings_value(settings,"node_url");
 		String url_base = get_settings_value(settings,"url_base");
