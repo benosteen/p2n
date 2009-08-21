@@ -697,7 +697,7 @@ public class DatabaseConnector_Mysql {
 			pstmt.setString(1,path);
 			ResultSet rs = pstmt.executeQuery();
 			rs.first();
-			String uuid = rs.getString("uuid");
+			String uuid = rs.getString("mapping_uuid");
 			disconnectMysql(con);
 			return uuid;
 		} catch (Exception e) {
