@@ -300,15 +300,20 @@ class ServiceInterface implements Runnable {
 			String access_id = (String)request_ht.get("access_id");
 			String network_access_id = get_settings_value("network_access_id");
 			String uuid = null;
-			String type = null;
+			String type = "local";
 			String actual_path = null;
-			if (access_id.equals(network_access_id)) {
-				type = "remote";
+			try {
+				if (access_id.equals(network_access_id)) {
+					type = "remote";
+					actual_path = get_settings_value("data_path") + type + "/" + requested_path;
+				} 
+			} catch (Exception e) {}
+			if (type.equals("local")) {
+				uuid = dbm.get_uuid_from_requested_path(requested_path);
+				actual_path = dbm.get_local_path_from_uuid(uuid);
 			} else {
-				type = "local";
+				uuid = dbm.get_uuid_from_actual_path(actual_path);
 			}
-			actual_path = get_settings_value("data_path") + type + "/" + requested_path;
-			uuid = dbm.get_uuid_from_actual_path(actual_path);
 			File file = new File(actual_path);
 			if (!file.exists()) {
 				message = "File Not Found";
