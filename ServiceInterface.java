@@ -295,18 +295,26 @@ class ServiceInterface implements Runnable {
 	private int send_head(OutputStream ops) {
 		PrintStream out = new PrintStream(ops);
 		try {
-			String requested_path = get_requested_path();
-			String uuid = dbm.get_uuid_from_requested_path(requested_path);
-			if (!dbm.has_local_copy(uuid) || uuid.equals("404")) {
-				message = "File Not Found";
-				return 404;
+			PSNFunctions psnf = new PSNFunctions();
+			String requested_path = psnf.get_requested_path(request_ht,settings);
+			String access_id = (String)request_ht.get("access_id");
+			String network_access_id = get_settings_value("network_access_id");
+			String uuid = null;
+			String type = null;
+			String actual_path = null;
+			if (access_id.equals(network_access_id)) {
+				type = "remote";
+			} else {
+				type = "local";
 			}
-			String actual_path = dbm.get_local_path_from_uuid(uuid);
-			if (actual_path.equals("404")) {
+			actual_path = get_settings_value("data_path") + type + "/" + requested_path;
+			uuid = dbm.get_uuid_from_actual_path(actual_path);
+			File file = new File(actual_path);
+			if (!file.exists()) {
 				message = "File Not Found";
 				return 404;
 			} 
-			output_object_headers(out,uuid);
+			output_object_headers(out,uuid,actual_path);
 			out.println("");
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -328,8 +336,7 @@ class ServiceInterface implements Runnable {
 			out.println("");
 	}
 
-	private void output_object_headers(PrintStream out, String uuid) throws Exception {
-			String actual_path = dbm.get_local_path_from_uuid(uuid);
+	private void output_object_headers(PrintStream out, String uuid, String actual_path) throws Exception {
 			File file = new File(actual_path);
 			out.println("HTTP/1.1 200 OK");
 			out.println("Date: " + getDateTime());
@@ -343,7 +350,7 @@ class ServiceInterface implements Runnable {
 				out.println(namespace_prefix + "-meta-" + key + ": " + value);
 			}
 			out.println("Connection: close");
-			String content_type = dbm.get_content_type(uuid,"local");
+			String content_type = dbm.get_content_type(uuid,actual_path);
 			out.println("Content-Type: " + content_type);
 			out.println("Content-Length: " + file.length());
 			out.println("Last-Modified: " + file.lastModified());
@@ -380,7 +387,7 @@ class ServiceInterface implements Runnable {
 			}
 			PrintStream out = new PrintStream(ops);
 			if (uuid != "") {
-				output_object_headers(out,uuid);
+				output_object_headers(out,uuid,actual_path);
 			} else {
 				output_object_headers(out,file,"text/plain");
 			}
