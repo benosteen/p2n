@@ -22,6 +22,10 @@ class PSNNode {
 	String url_base = "";
 	int last_handshake = 0;
 	int allocated_space = 0;
+	
+	public PSNNode() {
+		this.node_url = node_url;
+	}
 
 	public PSNNode(String node_url) {
 		this.node_url = node_url;

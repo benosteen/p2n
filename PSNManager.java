@@ -152,9 +152,10 @@ public class PSNManager {
 
 	private void outputStatus() {
 		int count = dbm.getNodeCount();
-		System.out.println("----------------------------------");
-		System.out.println("| Current Node Count : " + count + "        |");
-		System.out.println("----------------------------------");
+		PSNFunctions psnf = new PSNFunctions();
+		System.out.println("-------------------------------------------");
+		System.out.println("| " + psnf.getTime() + " Current Node Count : " + count + "        |");
+		System.out.println("-------------------------------------------");
 	}
 	
 	public static void main(String[] args) {

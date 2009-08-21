@@ -11,6 +11,7 @@ class PSNObject {
 	String local_path = null;
 	String md5_sum = null;
 	String mime_type = null;
+	PSNNode node = null;
 
 	public PSNObject() {
 	}
@@ -101,6 +102,14 @@ class PSNObject {
 
 	public String getMimeType() {
 		return mime_type;
+	}
+
+	public void setPSNNode(PSNNode node) {
+		this.node = node;
+	}
+
+	public PSNNode getPSNNode() {
+		return node;
 	}
 
 }

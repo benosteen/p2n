@@ -23,6 +23,12 @@ class PSNFunctions {
 		Date date = new Date();
 		return dateFormat.format(date);
 	}
+	
+	public String getTime() {
+		SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
+		format.setCalendar(Calendar.getInstance(new SimpleTimeZone(0, "GMT")));
+		return format.format(new Date());
+	}
 
 	public String getDateTime() {
 		SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
