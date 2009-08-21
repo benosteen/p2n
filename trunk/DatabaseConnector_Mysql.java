@@ -480,12 +480,12 @@ public class DatabaseConnector_Mysql {
 		} 
 	}
 
-	public String get_content_type(String uuid,String type) {
+	public String get_content_type(String uuid,String path) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("SELECT mime_type from files where mapping_uuid=? and type=?;");
+			PreparedStatement pstmt = con.prepareStatement("SELECT mime_type from files where mapping_uuid=? and path=?;");
 			pstmt.setString(1,uuid);
-			pstmt.setString(2,type);
+			pstmt.setString(2,path);
 			ResultSet rs = pstmt.executeQuery();
 			rs.first();
 			String content_type = rs.getString("mime_type");
@@ -690,6 +690,21 @@ public class DatabaseConnector_Mysql {
 		}
 	}
 	
+	public String get_uuid_from_actual_path(String path) {
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT mapping_uuid from files where path=?;");
+			pstmt.setString(1,path);
+			ResultSet rs = pstmt.executeQuery();
+			rs.first();
+			String uuid = rs.getString("uuid");
+			disconnectMysql(con);
+			return uuid;
+		} catch (Exception e) {
+			return "404";
+		}
+	}
+	
 	public boolean has_local_copy(String uuid) {
 		try {
 			Connection con = connectMysql();
@@ -870,6 +885,75 @@ public class DatabaseConnector_Mysql {
 		} catch (Exception e) {
 			e.printStackTrace();
 			return vec;
+		}
+	}
+	
+	public Vector get_non_scanned() {
+		Vector vec = new Vector();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select loc_id from files left join scanning_log on scanning_log.file_id=files.loc_id where scanning_log.file_id IS NULL;");
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				vec.add(rs.getInt("loc_id"));
+			}
+			disconnectMysql(con);
+			return vec;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return vec;
+		}
+	}
+
+	public PSNObject getPSNObjectFromFile(int file_id) {
+		PSNObject psno = new PSNObject();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select * from files where loc_id=?;");
+			pstmt.setInt(1,file_id);
+			ResultSet rs = pstmt.executeQuery();
+			if (rs.next()) {
+				psno.setUUID(rs.getString("mapping_uuid"));
+				psno.setRequestedPath(rs.getString("path"));
+				psno.setMD5Sum(rs.getString("md5_sum"));
+				psno.setMimeType(rs.getString("mime_type"));
+				
+				String node_id = rs.getString("node_id");
+				
+				PSNNode node = getPSNNode(node_id);
+				
+				psno.setPSNNode(node);
+				
+			}
+			disconnectMysql(con);
+			return psno;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return psno;
+		}
+	}
+
+	public PSNNode getPSNNode(String node_id) {
+		PSNNode node = new PSNNode();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select * from nodes where id=?;");
+			pstmt.setString(1, node_id);
+			ResultSet rs = pstmt.executeQuery();
+		
+			if (rs.next()) {
+				node.set_node_id(node_id);
+				node.set_node_url(rs.getString("url"));
+				node.set_url_base(rs.getString("url_base"));
+				node.set_allocated_space(rs.getInt("allocated_space"));
+				node.set_last_handshake(rs.getInt("last_handshake"));
+			}
+		
+			disconnectMysql(con);
+			return node;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return node;
 		}
 	}
 

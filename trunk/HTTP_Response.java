@@ -1,6 +1,9 @@
+import java.util.*;
+
 class HTTP_Response {
 	int error_code = 0;
 	Object body = "";
+	Hashtable raw = new Hashtable();
 
 
 	public HTTP_Response(int code) {
@@ -23,5 +26,11 @@ class HTTP_Response {
 		return body;
 	}
 
+	public void setRawData(Hashtable in) {
+		this.raw = in;
+	}
 
+	public Hashtable getRawData() {
+		return raw;
+	}
 }
