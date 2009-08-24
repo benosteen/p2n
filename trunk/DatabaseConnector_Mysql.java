@@ -930,6 +930,24 @@ public class DatabaseConnector_Mysql {
 		}
 	}
 
+	public Vector get_to_scanned(long timestamp) {
+		Vector vec = new Vector();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("SELECT file_id from scanning_log where (locked IS NULL or locked=0) and timestamp<?;");
+			pstmt.setLong(1,timestamp);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				vec.add(rs.getInt("file_id"));
+			}
+			disconnectMysql(con);
+			return vec;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return vec;
+		}
+	}
+
 	public PSNObject getPSNObjectFromFile(int file_id) {
 		PSNObject psno = new PSNObject();
 		try {

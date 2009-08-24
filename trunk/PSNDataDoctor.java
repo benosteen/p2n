@@ -69,6 +69,16 @@ public class PSNDataDoctor {
 			int file_id = (Integer)newItems.get(i);
 			scanFile(file_id);
 		}
+
+		PSNFunctions psnf = new PSNFunctions();
+		long unix = psnf.getDateTimeUnix();
+		unix = unix - 3600;
+		
+		newItems = (Vector)dbm.get_to_scanned(unix);
+		for (int i=0;i<newItems.size();i++) {
+			int file_id = (Integer)newItems.get(i);
+			scanFile(file_id);
+		}
 	}
 
 	public void scanFile(int file_id) {
