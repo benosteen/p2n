@@ -195,6 +195,30 @@ public class DatabaseConnector_Mysql {
 		return false;
 	}
 
+	public boolean updateScanningLog(int file_id,String message_type, String message, long unix) {
+		Connection con;
+		try {
+			con = connectMysql();
+			boolean done = false;
+			PreparedStatement pstmt = con.prepareStatement("DELETE FROM scanning_log where file_id=? and message_type=? and locked!=1;");
+			pstmt.setInt(1,file_id);
+			pstmt.setString(2,message_type);
+			pstmt.execute();
+			pstmt = con.prepareStatement("INSERT INTO scanning_log set file_id=?, message_type=?, message=?, timestamp=?;");
+			pstmt.setInt(1,file_id);
+			pstmt.setString(2,message_type);
+			pstmt.setString(3,message);
+			pstmt.setLong(4,unix);
+			done = pstmt.execute();
+			disconnectMysql(con);
+			return done;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+
 	public boolean register_access_key(String node_id, String access_id) {
 		Connection con;
 		try {
@@ -346,14 +370,15 @@ public class DatabaseConnector_Mysql {
 		return false;
 		
 	}
-	public boolean store_uuid_mapping(String access_id,String requested_path,String uuid,String acl) {
+	public boolean store_uuid_mapping(String access_id,String requested_path,String uuid,String acl,String bucket) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("INSERT INTO mappings set access_id=?, requested_path=?, uuid=?,acl=?");
+			PreparedStatement pstmt = con.prepareStatement("INSERT INTO mappings set access_id=?, requested_path=?, uuid=?,acl=?,bucket=?");
 			pstmt.setString(1,access_id);
 			pstmt.setString(2,requested_path);
 			pstmt.setString(3,uuid);
 			pstmt.setString(4,acl);
+			pstmt.setString(5,bucket);
 			pstmt.execute();
 			disconnectMysql(con);
 			return true;
@@ -642,7 +667,7 @@ public class DatabaseConnector_Mysql {
 	public boolean update_file_cache(String uuid,String store_path,String md5,String mime_type,String type,String node_id, String psndis, String psnres, String owner) {
 		try {
 			Connection con = connectMysql();
-			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?,node_id=?;");
+			PreparedStatement pstmt = con.prepareStatement("INSERT INTO files set mapping_uuid=?,path=?,md5_sum=?,mime_type=?,type=?,owner=?,node_id=?");
 			pstmt.setString(1,uuid);
 			pstmt.setString(2,store_path);
 			pstmt.setString(3,md5);
@@ -917,6 +942,7 @@ public class DatabaseConnector_Mysql {
 				psno.setRequestedPath(rs.getString("path"));
 				psno.setMD5Sum(rs.getString("md5_sum"));
 				psno.setMimeType(rs.getString("mime_type"));
+				psno.setType(rs.getString("type"));
 				
 				String node_id = rs.getString("node_id");
 				
@@ -972,6 +998,7 @@ public class DatabaseConnector_Mysql {
 				psno.setACL(rs.getString("acl"));
 				psno.setPSNDistribution(rs.getInt("psn_distribution"));
 				psno.setPSNResiliance(rs.getInt("psn_resiliance"));
+				psno.setBucket(rs.getString("bucket"));
 				if (rs.getInt("local_copy") == 1) {
 					psno.setLocalCopy(true);
 				} else {

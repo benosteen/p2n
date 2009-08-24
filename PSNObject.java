@@ -11,7 +11,9 @@ class PSNObject {
 	String local_path = null;
 	String md5_sum = null;
 	String mime_type = null;
+	String type = null;
 	PSNNode node = null;
+	String bucket = null;
 
 	public PSNObject() {
 	}
@@ -38,6 +40,14 @@ class PSNObject {
 
 	public String getRequestedPath() {
 		return requested_path;
+	}
+	
+	public void setBucket(String bucket) {
+		this.bucket = bucket;
+	}
+
+	public String getBucket() {
+		return bucket;
 	}
 
 	public void setLocalCopy(boolean local_copy) {
@@ -102,6 +112,14 @@ class PSNObject {
 
 	public String getMimeType() {
 		return mime_type;
+	}
+
+	public void setType(String type) {
+		this.type = type;
+	}
+
+	public String getType() {
+		return type;
 	}
 
 	public void setPSNNode(PSNNode node) {

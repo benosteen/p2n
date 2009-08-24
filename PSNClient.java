@@ -241,20 +241,13 @@ class PSNClient {
 
 	}
 
-	public HTTP_Response perform_head(Hashtable settings, String node_url, String uri, Keypair kp) {
+	public HTTP_Response perform_head(Hashtable settings, String node_url, String host, String uri, Keypair kp) {
 		PSNFunctions psnf = new PSNFunctions();
 		
 		setupSocket(node_url);
 		
 		Hashtable request_ht = new Hashtable();
 		
-		String host = "";
-		if (node_url.indexOf(":") > -1) {
-			host = node_url.substring(0,node_url.indexOf(":"));
-		} else {
-			host = node_url;
-		}
-	
 		request_ht.put("type","HEAD");
 		request_ht.put("host",host);
 		request_ht.put("date",psnf.getDateTime());
@@ -280,6 +273,13 @@ class PSNClient {
 		}
 
 		PrintStream psout = new PrintStream(out);
+
+		System.out.println("HEAD " + uri + " HTTP/1.1");
+		System.out.println("Host: " + host);
+		System.out.println("Date: " + (String)request_ht.get("date"));
+		System.out.println("Authorization: " + request_ht.get("authorization"));
+		System.out.println("");
+
 		psout.println("HEAD " + uri + " HTTP/1.1");
 		psout.println("Host: " + host);
 		psout.println("Date: " + (String)request_ht.get("date"));
@@ -293,15 +293,6 @@ class PSNClient {
 
 			HTTP_Response res = new HTTP_Response(Integer.parseInt((String)response_ht.get("code")));
 			res.setRawData(response_ht);
-			int clength = 0;
-			try {
-				clength = Integer.parseInt((String)response_ht.get("content-length"));
-			} catch (Exception e) {
-			}
-			if (clength > 0 ) {
-				String response_body = read_bitstream(in,clength);
-				res.setBody(response_body);
-			}
 			return res;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -607,7 +598,8 @@ class PSNClient {
 					to_put = request[1].trim();
 				}
 				response_ht.put(req_key,to_put);
-			} catch (Exception not_existant) {}
+			} catch (Exception not_existant) {
+			}
 		}
 		return response_ht;
 	}
