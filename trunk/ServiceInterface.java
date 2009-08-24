@@ -783,7 +783,7 @@ public int authorize_request() 	{
 		}
 		if (uuid.equals("404")) {
 			uuid = new UUID().toString();
-			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get(namespace_prefix + "-acl"));
+			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get(namespace_prefix + "-acl"),get_bucket_name());
 			if (success == false) {
 				message = "Failed to create file storage reference";
 				return 500;

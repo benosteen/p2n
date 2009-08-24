@@ -47,8 +47,7 @@ public class PSNDataDoctor {
 			String value = (String)v.get(0);
 			return value;
 		} catch (Exception e) {
-			e.printStackTrace();
-			return "";
+			return null;
 		}
 	}
 
@@ -62,11 +61,6 @@ public class PSNDataDoctor {
 	}
 
 	private void outputStatus() {
-		int count = dbm.getNodeCount();
-		PSNFunctions psnf = new PSNFunctions();
-		System.out.println("-------------------------------------------");
-		System.out.println("| " + psnf.getTime() + " Current Node Count : " + count + "        |");
-		System.out.println("-------------------------------------------");
 	}
 
 	public void scanProcess() {
@@ -84,8 +78,35 @@ public class PSNDataDoctor {
 		String uri = psno.getRequestedPath();
 		Keypair kp = getNetworkKeypair();
 		PSNClient psn_con = new PSNClient();
-		HTTP_Response res = psn_con.perform_head(settings,node_url,uri,kp);
-		System.out.println("DONE WITH ERROR CODE: " + res.getErrorCode());
+
+		PSNFunctions psnf = new PSNFunctions();
+		long unix = psnf.getDateTimeUnix();
+
+		String host = get_settings_value("url_base");
+		if (psno.getType().equals("local")) {
+			PSNObject local = dbm.get_psn_object(psno.getUUID());
+			String bucket = local.getBucket();
+			host = bucket + "." + host;
+
+			uri = local.getRequestedPath();
+			uri = uri.replace("/" + bucket,"");
+		}
+	
+		HTTP_Response res = psn_con.perform_head(settings,node_url,host,uri,kp);
+		Hashtable request_ht = res.getRawData();
+		String res_mime = (String)request_ht.get("content-type");
+		String res_md5 = (String)request_ht.get("content-md5");
+		if (res.getErrorCode() != 200) {
+			System.out.println("Possible failure");
+			return;
+		}
+		if (res_mime.equals((String)psno.getMimeType()) && res_md5.equals((String)psno.getMD5Sum())) {
+			dbm.updateScanningLog(file_id,"md5+mime","passed",unix);
+			System.out.println("All checks successful");
+		} else {
+			System.out.println("Checks failed");
+			dbm.updateScanningLog(file_id,"md5+mime","failed",unix);
+		}
 	}
 	
 	public static void main(String[] args) {
@@ -126,6 +147,7 @@ public class PSNDataDoctor {
 			psn_doc.scanProcess();		
 	
 			try {
+				System.out.println("SLEEPING");
 				Thread.sleep(540000);
 			} catch (Exception e) {
 				e.printStackTrace();
