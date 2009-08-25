@@ -354,6 +354,15 @@ class ServiceInterface implements Runnable {
 				String value = (String)metadata.get(key);
 				out.println(namespace_prefix + "-meta-" + key + ": " + value);
 			}
+			PSNDataDoctor psn_doc = new PSNDataDoctor(settings);
+			if (dbm.has_local_copy(uuid)) {
+				Vector file_ids = dbm.getFileIDs(uuid,"local");
+				out.println(namespace_prefix + "-meta-local-state: " + psn_doc.getFileResiliance(file_ids));
+			}
+			if (dbm.has_psn_copy(uuid)) {
+				Vector file_ids = dbm.getFileIDs(uuid,"remote");
+				out.println(namespace_prefix + "-meta-PSN-state: " + psn_doc.getFileResiliance(file_ids));
+			}
 			out.println("Connection: close");
 			String content_type = dbm.get_content_type(uuid,actual_path);
 			out.println("Content-Type: " + content_type);
