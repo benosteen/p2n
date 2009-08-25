@@ -200,7 +200,7 @@ public class DatabaseConnector_Mysql {
 		try {
 			con = connectMysql();
 			boolean done = false;
-			PreparedStatement pstmt = con.prepareStatement("DELETE FROM scanning_log where file_id=? and message_type=? and locked!=1;");
+			PreparedStatement pstmt = con.prepareStatement("DELETE FROM scanning_log where file_id=? and message_type=? and (locked IS NULL or locked=0);");
 			pstmt.setInt(1,file_id);
 			pstmt.setString(2,message_type);
 			pstmt.execute();
@@ -1001,6 +1001,50 @@ public class DatabaseConnector_Mysql {
 		}
 	}
 
+	public Vector getFileIDs(String uuid,String type) {
+		Vector vec = new Vector();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select loc_id from files where mapping_uuid=? and type=?");
+			pstmt.setString(1,uuid);
+			pstmt.setString(2,type);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				vec.add(rs.getInt("loc_id"));
+			}
+			disconnectMysql(con);
+			return vec;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	public Vector getFileScanData(int file_id) {
+		Vector vec = new Vector();
+		try {
+			Connection con = connectMysql();
+			PreparedStatement pstmt = con.prepareStatement("select * from scanning_log where file_id=?;");
+			pstmt.setInt(1,file_id);
+			ResultSet rs = pstmt.executeQuery();
+			while (rs.next()) {
+				PSNScanData psnsd = new PSNScanData();
+				psnsd.setFileID(file_id);
+				psnsd.setMessageType(rs.getString("message_type"));
+				psnsd.setMessage(rs.getString("message"));
+				psnsd.setTimestamp(rs.getInt("timestamp"));
+				psnsd.setLocked(rs.getInt("locked"));
+
+				vec.add(psnsd);
+			}	
+			disconnectMysql(con);
+			return vec;	
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	} 
+
 	public PSNObject get_psn_object(String uuid) {
 		Hashtable ht = new Hashtable();
 		try {
@@ -1036,9 +1080,12 @@ public class DatabaseConnector_Mysql {
 					psno.setMD5Sum(rs2.getString("md5_sum"));
 					psno.setMimeType(rs2.getString("mime_type"));
 				}
+				disconnectMysql(con);
+				return psno;
+			} else {
+				disconnectMysql(con);
+				return null;	
 			}
-			disconnectMysql(con);
-			return psno;
 		} catch (Exception e) {
 			e.printStackTrace();
 			return null;

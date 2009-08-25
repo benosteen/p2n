@@ -60,7 +60,35 @@ public class PSNDataDoctor {
 		return kp;
 	}
 
-	private void outputStatus() {
+	public String getFileResiliance(Vector file_ids) {
+		
+		long most_recent = 0;
+		int count = 0;
+		int older = 0;
+		for(int i=0;i<file_ids.size();i++) {
+			Vector scan_data = dbm.getFileScanData((Integer)file_ids.get(i));
+			for(int j=0;j<scan_data.size();j++) {
+				PSNScanData psnsd = (PSNScanData)scan_data.get(j);
+				if (psnsd.getMessageType().equals("md5+mime")) {
+					long time_in = ((Integer)psnsd.getTimestamp()).longValue();
+					if (time_in > (most_recent + 3600)) {
+						older = count - older;
+						most_recent = time_in;
+					}
+					if (time_in < (most_recent - 3600)) {
+						older++;
+					}
+					count++;
+				}
+			}
+		}
+		double count_div = ((Integer)count).doubleValue();	
+		double factor = older / count_div;
+		double percentage = (1 - factor) * 100;
+		System.out.println("Factor = " + factor + " which is o/c " + older + " / " + count);
+		return percentage + "% @ " + most_recent;
+
+		
 	}
 
 	public void scanProcess() {
