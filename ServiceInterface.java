@@ -22,7 +22,7 @@ class ServiceInterface implements Runnable {
 	private Hashtable response_ht = new Hashtable();
 
 	private PSNFunctions psnf = new PSNFunctions();
-
+	private PSNHTTPFunctions psnf_http = new PSNHTTPFunctions();
 
 	/**
 	  * Need to try and remove or move these
@@ -140,7 +140,7 @@ class ServiceInterface implements Runnable {
 	
 			try {
 	
-				int status = header_message(http_code,out);
+				int status = psnf_http.header_message(http_code,out,message,"");
 				client.close();	
 	
 				return false;
@@ -206,7 +206,7 @@ class ServiceInterface implements Runnable {
 			try {
 	
 				// Error out and return
-				int status = header_message(http_code,out);
+				int status = psnf_http.header_message(http_code,out,message,"");
 				client.close();	
 			
 				return false;
@@ -243,7 +243,7 @@ class ServiceInterface implements Runnable {
 	
 			try {
 	
-				int status = header_message(http_code,out);
+				int status = psnf_http.header_message(http_code,out,message,"");
 				client.close();	
 	
 				return false;
@@ -268,13 +268,13 @@ class ServiceInterface implements Runnable {
 	
 				} else {
 	
-					status = header_message(http_code,out);
+					status = psnf_http.header_message(http_code,out,message,(String)response_ht.get("location"));
 					
 					http_code = put_bitstream(in,log_writer);
 	
 				}
 	
-				status = header_message(http_code,out);
+				status = psnf_http.header_message(http_code,out,message,(String)response_ht.get("location"));
 	
 			} else if (type.equals("POST")) {
 	
@@ -289,13 +289,13 @@ class ServiceInterface implements Runnable {
 	
 				}
 	
-				status = header_message(http_code,out);
+				status = psnf_http.header_message(http_code,out,message,(String)response_ht.get("location"));
 	
 				if (http_code == 100) {
 	
 					http_code = process_post(in,log_writer);
 					System.out.println("HTTP CODE : " + http_code + " " + message);
-					status = header_message(http_code,out);
+					status = psnf_http.header_message(http_code,out,message,(String)response_ht.get("location"));
 	
 					if (http_code == 202) {
 	
@@ -311,7 +311,7 @@ class ServiceInterface implements Runnable {
 	
 				if (http_code != 200) {
 	
-					status = header_message(http_code,out);
+					status = psnf_http.header_message(http_code,out,message,(String)response_ht.get("location"));
 	
 				}
 	
@@ -339,7 +339,7 @@ class ServiceInterface implements Runnable {
 	
 				}
 	
-				status = header_message(http_code,out);
+				status = psnf_http.header_message(http_code,out,message,(String)response_ht.get("location"));
 	
 			}
 	
@@ -1180,30 +1180,6 @@ public int authorize_request() 	{
 		}
 	}
 
-	/*
-	private String get_bucket_name() {
-		
-		String host_part = (String)request_ht.get("host");
-		
-		String bucket = "";
-		
-		try {
-		
-			bucket = host_part.substring(0,host_part.indexOf(url_base)-1);
-		
-		} catch (Exception e) {
-		
-			message = "InvalidURI: Couldn't parse the specified URI or URI of host not matched to this domain.";
-		
-			return null;
-		
-		}
-		
-		return bucket;
-	
-	}
-	*/
-
 	private int  handle_bucket_deletion(BufferedWriter log_writer) {
 
 		String host_part = (String)request_ht.get("host");
@@ -1316,52 +1292,6 @@ public int authorize_request() 	{
 			e.printStackTrace();
 		}
 		return input_lines;
-	}
-	
-	private int header_message(int http_code, OutputStream ops) {
-		PrintStream out = new PrintStream(ops);
-		switch (http_code) {
-			case 100: out.println("HTTP/1.1 100 Continue"); outputResponse(100,out); break;
-			case 200: out.println("HTTP/1.1 200 OK"); break;
-			case 201: out.println("HTTP/1.1 201 Created"); outputResponse(201,out); break;
-			case 202: out.println("HTTP/1.1 202 Accepted"); outputResponse(202,out); break;
-			case 204: out.println("HTTP/1.1 204 No Content"); outputResponse(204,out); break;
-			case 302: out.println("HTTP/1.1 302 Found"); outputResponse(302,out); break;
-			case 307: out.println("HTTP/1.1 307 Temporary Redirect"); outputResponse(307,out); break;
-			case 400: out.println("HTTP/1.1 400 Bad Request"); outputResponse(400,out); break;
-			case 403: out.println("HTTP/1.1 403 Forbidden"); outputResponse(403,out); break;
-			case 404: out.println("HTTP/1.1 404 Not Found"); outputResponse(404,out); break;
-			case 409: out.println("HTTP/1.1 409 Conflict"); outputResponse(409,out); break;
-			case 415: out.println("HTTP/1.1 415 Unsupported Media Type"); outputResponse(415,out); break;
-			case 500: out.println("HTTP/1.1 500 Internal Server Error"); outputResponse(500,out); break;
-			default: out.println("HTTP/1.1 400 Bad Request"); break;
-		}
-		//out.println("Date: " + psnf.getDateTime());
-		//out.println("Server: Service Controller");
-		//out.println("X-Powered-By: Java");
-		//out.println("Connection: close");
-		//out.println("Content-Type: text/xml; charset=utf-8");
-		out.println("");
-		return http_code;
-	}
-
-	private void outputResponse(int http_code,PrintStream out) {
-		
-		out.println("Date: " + psnf.getDateTime());
-		out.println("Server: Service Controller");
-		out.println("X-Powered-By: Java");
-		out.println("Connection: close");
-		if (http_code == 302 || http_code == 307) {
-			out.println("Location: " + response_ht.get("location"));
-		}
-		if (!message.equals("")) {
-			out.println("Content-Type: text/html; charset=utf-8");
-			out.println("Content-Length: " + message.toCharArray().length);
-			out.println("");
-			out.println(message);
-		} else {
-			out.println("Content-Length: 0");
-		}
 	}
 
 }
