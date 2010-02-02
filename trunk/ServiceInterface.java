@@ -20,18 +20,24 @@ class ServiceInterface implements Runnable {
 	private Socket client;
 	private Hashtable request_ht = new Hashtable();
 	private Hashtable response_ht = new Hashtable();
+
+	private PSNFunctions psnf = new PSNFunctions();
+
+
+	/**
+	  * Need to try and remove or move these
+	  */ 
 	private String message = "";	
 	private Hashtable settings = new Hashtable();
 	private DatabaseConnector_Mysql dbm = new DatabaseConnector_Mysql();
-
-	/**
-	  * Global Varibales set from configuration file
-	  */
 	private String node_id = "";
 	private String node_url = "";
 	private String url_base = "";
 	private String log_path = "";
-	private String log_file = ""; 
+	private String log_file = "";
+	/**
+	  * These need to become targets!
+	  */  
 	private String base_path = "";
 	private int allocated_space = 0;
 		
@@ -40,31 +46,6 @@ class ServiceInterface implements Runnable {
 		this.client = client;
 		this.settings = settings;
 	}
-
-	
-	private String getDate() {
-		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-		Date date = new Date();
-		return dateFormat.format(date);
-	}
-
-	public String getDateTime() {
-		SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
-		format.setCalendar(Calendar.getInstance(new SimpleTimeZone(0, "GMT")));
-		return format.format(new Date());
-		
-		//DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss");
-		//Date date = new Date();
-		//return dateFormat.format(date) + " GMT";
-	}
-
-	public Long getDateTimeUnix() {
-		TimeZone tz = TimeZone.getTimeZone("UTC");
-		Calendar cal = new GregorianCalendar(tz);
-		cal.setTime(new Date());
-		return ((cal.getTime().getTime())/1000);
-	}
-
 
 	private String get_settings_value(String key) {
 		try {
@@ -83,7 +64,7 @@ class ServiceInterface implements Runnable {
 			node_url =  get_settings_value("node_url");
 			url_base = get_settings_value("url_base");
 			log_path = get_settings_value("log_path");
-			log_file = log_path + "status.log_" + getDate();
+			log_file = log_path + "status.log_" + psnf.getDate();
 			base_path = get_settings_value("data_path");
 			allocated_space = Integer.parseInt(get_settings_value("allocated_space"));
 			dbm.setCredentials(get_settings_value("database_host"),get_settings_value("database_name"),get_settings_value("database_user"),get_settings_value("database_pass"));
@@ -105,11 +86,14 @@ class ServiceInterface implements Runnable {
 
 
 	public void run(){
+		// Setup and check configuration for running
 		boolean success = global_variables();
 		if (!success) {
 			System.out.println("Configuration wrong!");
 			System.exit(0);
 		}
+
+		
 		InputStream in = null;
 		OutputStream out = null;
 		BufferedWriter log_writer = null;
@@ -118,8 +102,6 @@ class ServiceInterface implements Runnable {
 			log_writer = new BufferedWriter(new FileWriter(log_file,true));
 			in = client.getInputStream();
 			out = client.getOutputStream();
-			//in = new BufferedReader(new InputStreamReader(client.getInputStream()));
-			//out = new PrintWriter(client.getOutputStream(), true);
 		} catch (IOException e) {
 			try {
 				System.out.println("Connection Closed 0");
@@ -128,6 +110,8 @@ class ServiceInterface implements Runnable {
 			} catch (IOException ex) {
 			}
 		}
+		
+		// Sit and wait for something to do.
 		boolean processor = true;
 		while (processor) {
 			processor = process_single_request(in,out,log_writer);
@@ -135,138 +119,258 @@ class ServiceInterface implements Runnable {
 	}
 	
 	private boolean process_single_request(InputStream in, OutputStream out, BufferedWriter log_writer) {
-		String line = "";
+
 		System.out.println("NEW REQUEST");
-		request_ht = new Hashtable();
-		response_ht = new Hashtable();
-		Vector input_lines = new Vector();
+		PSNReturnObject psn_return;
 		
-		request_ht.put("content-length","0");
+		response_ht = new Hashtable();
+		
+		Vector input_lines = new Vector();
 		input_lines = read_lines(in,log_writer);
-		int http_code = process_input(input_lines);
+	
+		psn_return = psnf.process_input(input_lines);
+
+		int http_code = psn_return.getErrorCode();
+		message = psn_return.getMessage();
+		request_ht = (Hashtable)psn_return.getObject();		
+
+
 		String string_to_sign = "";
 		if (http_code > 399) {
+	
 			try {
+	
 				int status = header_message(http_code,out);
 				client.close();	
+	
 				return false;
+	
 			} catch (IOException s_error) {	
+	
 				s_error.printStackTrace();
+	
 			}
+	
 		}
+		
 		String type = (String)request_ht.get("type"); 
+		
 		boolean bypass_authorisation = false;
+		
 		if (type.equals("GET") || type.equals("HEAD")) {
-			String bucket = get_bucket_name();
+	
+			String host_part = (String)request_ht.get("host");	
+			String bucket = psnf.get_bucket_name(host_part,url_base);
+		
 			if (bucket == null) {
+	
+				//See if this is just a connection test.		
 				String requested_path = (String)request_ht.get("uri");
+		
 				if (requested_path.equals("/connection/test")) {
+					
+					// Output a connection test success
 					output_connection_test_success(out);
+					
 					return true;
+		
 				}
+		
 			} else {
+	
 				if (file_exists()) {
+	
 					if (public_access_allowed()) {
+	
 						bypass_authorisation = true;
 					} else {
+	
 						message = "File not found";
 						http_code = 404;
+	
 					}
+	
 				} else {
+	
 					message = "File not found";
 					http_code = 404;
+	
 				}
+
 			}
+
 		}
+	
 		if (http_code > 399) {
+			
 			try {
+	
+				// Error out and return
 				int status = header_message(http_code,out);
 				client.close();	
+			
 				return false;
+			
 			} catch (IOException s_error) {	
+			
 				s_error.printStackTrace();
+			
 			}
 		}
+	
 		if (bypass_authorisation) {
+	
 			http_code = 100;
+	
 		} else {
+	
 			String auth_temp_amz = (String)request_ht.get("authorization");
+	
 			if (auth_temp_amz == null) {
+	
 				message = "MissingSecurityHeader: Your request was missing a required header.";
 				http_code = 400;
+	
 			} else {
+	
 				http_code = authorize_request();
+	
 			}
+	
 		}
+	
 		if (http_code > 399) {
+	
 			try {
+	
 				int status = header_message(http_code,out);
 				client.close();	
+	
 				return false;
+	
 			} catch (IOException s_error) {	
+	
 				s_error.printStackTrace();
+	
 			}
+	
 		} else {
+	
 			int status = 0;
+	
 			if (type.equals("PUT")) {
+	
 				int clength = Integer.parseInt(request_ht.get("content-length").toString().trim());
+	
 				if (clength == 0) {
+	
 					http_code = handle_bucket_creation(log_writer);
+	
 				} else {
+	
 					status = header_message(http_code,out);
+					
 					http_code = put_bitstream(in,log_writer);
+	
 				}
+	
 				status = header_message(http_code,out);
+	
 			} else if (type.equals("POST")) {
+	
 				if (request_ht.get("uri").equals("/?config")) {
+	
 					http_code = 100;
+	
 				} else {
+	
 					http_code = 400;
 					message = "Bad or Invalid Post Request";
+	
 				}
+	
 				status = header_message(http_code,out);
+	
 				if (http_code == 100) {
+	
 					http_code = process_post(in,log_writer);
 					System.out.println("HTTP CODE : " + http_code + " " + message);
 					status = header_message(http_code,out);
+	
 					if (http_code == 202) {
+	
 						http_code = node_handshake(message);
+		
 					}
+	
 				}
+	
 			} else if (type.equals("GET")) {
+	
 				http_code = get_file(out);
+	
 				if (http_code != 200) {
+	
 					status = header_message(http_code,out);
+	
 				}
+	
 			} else if (type.equals("HEAD")) {
+	
 				http_code = send_head(out);
+	
 			} else if (type.equals("DELETE")) {
+	
 				String uri = (String)request_ht.get("uri");
+	
 				if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
+	
 					uri = uri.substring(0,uri.indexOf("?"));
+	
 				}
+	
 				if (uri.trim().equals("/")) {
+	
 					http_code = handle_bucket_deletion(log_writer);
+	
 				} else {
+
 					http_code = delete_file(log_writer);
+	
 				}
+	
 				status = header_message(http_code,out);
+	
 			}
+	
 		}
+	
 		try {
+	
 			client.close();	
+	
 			log_writer.close();
+	
 			return false;
+	
 		} catch (IOException s_error) {	
+	
 			s_error.printStackTrace();
+	
 		}
+	
 		return true;
+	
 	}
 	
+	
 	private boolean public_access_allowed() {
+		
 		String requested_path = get_requested_path();
 		String uuid = dbm.get_uuid_from_requested_path(requested_path);
+		
 		return dbm.public_access(uuid);
+	
 	}
 
 	private boolean file_exists() {
@@ -280,9 +384,11 @@ class ServiceInterface implements Runnable {
 	}
 
 	private void output_connection_test_success(OutputStream ops) {
+	
 		PrintStream out = new PrintStream(ops);
+	
 		out.println("HTTP/1.1 200 OK");
-		out.println("Date: " + getDateTime());
+		out.println("Date: " + psnf.getDateTime());
 		out.println("Server: Service Controller");
 		out.println("X-Powered-By: Java");
 		out.println("Connection: close");
@@ -290,12 +396,12 @@ class ServiceInterface implements Runnable {
 		out.println("Content-Length: 28");
 		out.println("");
 		out.println("aws sanity check succeeded!");
+	
 	}
 
 	private int send_head(OutputStream ops) {
 		PrintStream out = new PrintStream(ops);
 		try {
-			PSNFunctions psnf = new PSNFunctions();
 			String requested_path = psnf.get_requested_path(request_ht,settings);
 			String access_id = (String)request_ht.get("access_id");
 			String network_access_id = get_settings_value("network_access_id");
@@ -330,7 +436,7 @@ class ServiceInterface implements Runnable {
 	private void output_object_headers(PrintStream out, File file, String content_type) throws Exception {
 			out.println("HTTP/1.1 200 OK");
 			System.out.println("SENDING: HTTP/1.1 200 OK");
-			out.println("Date: " + getDateTime());
+			out.println("Date: " + psnf.getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: PSN Node Control");
 			out.println("Connection: close");
@@ -344,7 +450,7 @@ class ServiceInterface implements Runnable {
 	private void output_object_headers(PrintStream out, String uuid, String actual_path) throws Exception {
 			File file = new File(actual_path);
 			out.println("HTTP/1.1 200 OK");
-			out.println("Date: " + getDateTime());
+			out.println("Date: " + psnf.getDateTime());
 			out.println("Server: Service Controller");
 			out.println("X-Powered-By: PSN Node Control");
 			Hashtable metadata = dbm.get_object_metadata(uuid);
@@ -442,24 +548,43 @@ class ServiceInterface implements Runnable {
 	}
 
 private String get_requested_path() {
+
 	String host_part = (String)request_ht.get("host");
 	host_part = host_part.replace(url_base,"");
+
 	try {
+
 		if (host_part.indexOf(":") > 0) {
+
 			host_part = host_part.substring(0,host_part.indexOf(":"));
+
 		}
+
 		if (host_part.substring(host_part.length()-1,host_part.length()).equals(".")) {
+
 			host_part = host_part.substring(0,host_part.length()-1);
+
 		}
+
 		if (!host_part.equals("")) {
+
 			host_part = "/" + host_part;
+
 		}
+
 	} catch (Exception e) {
+
 	}
+
 	String uri = (String)request_ht.get("uri");
+		// This is the only place process_input is called	
+
 	if (uri.indexOf("?") > -1 && (uri.indexOf("=") > uri.indexOf("?"))) {
+
 		uri = uri.substring(0,uri.indexOf("?"));
+
 	}
+
 	return host_part + uri;
 }
 
@@ -485,7 +610,6 @@ public int authorize_request() 	{
 		return 500;
 	}
 
-	PSNFunctions psnf = new PSNFunctions();
 	String string_to_sign = psnf.getStringToSign(request_ht,settings);
 
 	String our_sign = "";
@@ -526,26 +650,48 @@ public int authorize_request() 	{
 	}
 
 	private int handle_bucket_creation(BufferedWriter log_writer) {
-		String bucket = get_bucket_name();
+	
+		String host_part = (String)request_ht.get("host");
+		
+		String bucket = psnf.get_bucket_name(host_part,url_base);
+		
 		if (bucket == null) {
+		
 			return 500;
+		
 		}
+		
 		if (check_bucket() == 200) {
+		
 			message = "BucketAlreadyExists: Bucket already exists.";
+		
 			return 409;
+		
 		}
+		
 		Boolean success = false;
+		
 		try { 
+		
 			success = (new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+bucket)).mkdirs();
+		
 		} catch (Exception e) {
+		
 			e.printStackTrace();
+		
 			return 500;
+		
 		}
+		
 		if (success == true) {
+		
 			return 200;
+		
 		} else {
+		
 			message = "Unable to create bucket";
 			return 500;
+	
 		}
 		
 	}
@@ -561,7 +707,6 @@ public int authorize_request() 	{
 	}
 
 	public int delete_p2n_file(BufferedWriter log_writer) {
-		PSNFunctions psnf = new PSNFunctions();
 		String requested_path = psnf.get_requested_path(request_ht,settings);
 		String[] path_bits = requested_path.split("/");
 		String in_access_id = path_bits[0];
@@ -675,7 +820,10 @@ public int authorize_request() 	{
 	}
 
 	public void delete_empty_uuid(String uuid) {
-		File store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+
+		String host_part = (String)request_ht.get("host");
+
+		File store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+psnf.get_bucket_name(host_part,url_base) + "/" + uuid);
 		try {
 			store_path.delete();
 		} catch (Exception e) {}
@@ -696,7 +844,6 @@ public int authorize_request() 	{
 	}
 
 	public int put_p2n_bitstream(InputStream in, BufferedWriter log_writer) {
-		PSNFunctions psnf = new PSNFunctions();
 		String requested_path = psnf.get_requested_path(request_ht,settings);
 		String[] path_bits = requested_path.split("/");
 		String in_access_id = path_bits[0];
@@ -780,6 +927,9 @@ public int authorize_request() 	{
 		String requested_path = get_requested_path();
 		String access_id = (String)request_ht.get("access_id");
 		
+		String host_part = (String)request_ht.get("host");
+		String bucket_name = psnf.get_bucket_name(host_part,url_base);
+
 		String uuid = dbm.get_uuid_from_request(access_id,requested_path);
 		if (uuid.equals("500")) {
 			message = "Failed to fetch indexes.";
@@ -792,12 +942,12 @@ public int authorize_request() 	{
 		}
 		if (uuid.equals("404")) {
 			uuid = new UUID().toString();
-			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get(namespace_prefix + "-acl"),get_bucket_name());
+			success = dbm.store_uuid_mapping(access_id,requested_path,uuid,(String)request_ht.get(namespace_prefix + "-acl"),bucket_name);
 			if (success == false) {
 				message = "Failed to create file storage reference";
 				return 500;
 			}
-			File store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+			File store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid);
 			try {
 				success = store_path.mkdir();
 			} catch (Exception e) {
@@ -809,14 +959,14 @@ public int authorize_request() 	{
 				return 500;
 			}
 
-			store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + get_bucket_name() + "/" + uuid + "/" + uri);
+			store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + bucket_name + "/" + uuid + "/" + uri);
 			int http_code = read_bitstream(in,store_path);
 			if (http_code != 200) {
-				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid + "/" + uri);
 				store_path.delete();
-				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid);
 				store_path.delete();
-				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+				store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid + "/" + uri);
 				try {
 					http_code = dbm.delete_uuid_mapping(uuid,"local",store_path.toString(),node_id);
 				} catch (Exception e) {
@@ -844,11 +994,11 @@ public int authorize_request() 	{
 				if (success) {
 					return 200;
 				} else {
-					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid + "/" + uri);
 					store_path.delete();
-					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid);
+					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid);
 					store_path.delete();
-					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+get_bucket_name() + "/" + uuid + "/" + uri);
+					store_path = new File(base_path+"local/"+(String)request_ht.get("access_id")+"/"+ bucket_name + "/" + uuid + "/" + uri);
 					try {
 						http_code = dbm.delete_uuid_mapping(uuid,"local",store_path.toString(),node_id);
 					} catch (Exception e) {
@@ -858,7 +1008,7 @@ public int authorize_request() 	{
 				}
 			}
 		} else {
-			File store_path = store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + get_bucket_name() + "/" + uuid + "/" + uri);
+			File store_path = store_path = new File(base_path + "local/" + (String)request_ht.get("access_id") + "/" + bucket_name + "/" + uuid + "/" + uri);
 			if (store_path.exists()) {
 				String in_md5 = (String)request_ht.get("content-md5");
 				String md5_sum = get_md5(store_path);
@@ -1030,20 +1180,36 @@ public int authorize_request() 	{
 		}
 	}
 
+	/*
 	private String get_bucket_name() {
+		
 		String host_part = (String)request_ht.get("host");
+		
 		String bucket = "";
+		
 		try {
+		
 			bucket = host_part.substring(0,host_part.indexOf(url_base)-1);
+		
 		} catch (Exception e) {
+		
 			message = "InvalidURI: Couldn't parse the specified URI or URI of host not matched to this domain.";
+		
 			return null;
+		
 		}
+		
 		return bucket;
+	
 	}
+	*/
 
 	private int  handle_bucket_deletion(BufferedWriter log_writer) {
-		String bucket = get_bucket_name();
+
+		String host_part = (String)request_ht.get("host");
+
+		String bucket = psnf.get_bucket_name(host_part,url_base);
+
 		if (bucket == null) {
 			return 500;
 		}
@@ -1151,83 +1317,7 @@ public int authorize_request() 	{
 		}
 		return input_lines;
 	}
-
-	private int process_input(Vector input_lines) {
-		String line = (String)input_lines.get(0);
-		String[] request = line.split(" ");
-		if (request[0].equalsIgnoreCase("HEAD") || request[0].equalsIgnoreCase("GET") || request[0].equalsIgnoreCase("POST") || request[0].equalsIgnoreCase("PUT") || request[0].equalsIgnoreCase("DELETE") || request[0].equalsIgnoreCase("TRACE") || request[0].equalsIgnoreCase("OPTIONS") || request[0].equalsIgnoreCase("CONNECT")) {
-			request_ht.put("type",request[0]);
-			String uri = request[1];
-			if (uri.indexOf("?") > 0) {
-				String uri_params = uri.substring(uri.indexOf("?")+1,uri.length());
-				String[] uri_params_bits = uri_params.split("&");
-				String aws_access_id = "";
-				String aws_signature = "";
-				String expires = "";
-				int success_count = 0;
-				for (int i=0; i<uri_params_bits.length; i++) {
-					String[] sides = uri_params_bits[i].split("=");
-					if (sides[0].equals("AWSAccessKeyId")) {
-						aws_access_id = sides[1];
-						success_count++;
-					}
-					if (sides[0].equals("Signature")) {
-						aws_signature = new URLDecoder().decode(sides[1]);
-						success_count++;
-					}
-					if (sides[0].equals("Expires")) {
-						expires = sides[1];
-						success_count++;
-					}
-				}
-				if (success_count == 3) {
-					request_ht.put("authorization","AWS " + aws_access_id + ":" + aws_signature);
-					request_ht.put("date",expires);
-				}
-
-			}
-			request_ht.put("uri",uri);
-			request_ht.put("protocal",request[2]);
-			Enumeration e = input_lines.elements();
-			e.nextElement();
-			while (e.hasMoreElements()) {
-				line = (String)e.nextElement();
-				request = line.split(":",2);
-				if (request.length < 2) {
-					continue;
-				}
-				String to_put = "";
-				String req_key = request[0].trim().toLowerCase();
-				try {
-					if (req_key.equals("content-length")) {
-						to_put = ((String)request[1]).trim();
-					} else {
-						to_put = (String)request_ht.get(req_key);
-						if (to_put != null) {
-							to_put += ",";
-						}
-						if (to_put != null ) {
-							to_put += ((String)request[1]).trim();
-						} else {
-							to_put = ((String)request[1]).trim();
-						}
-					}
-				} catch (Exception array_wrong) {
-					array_wrong.printStackTrace();
-				} finally {
-					request_ht.put(req_key,to_put);
-				}
-			}
-			return 200;
-		} else {
-			System.out.println("Line process error");
-			message = "Bad Request: Could not understand headers";
-			return 400;
-		}
-	}
-
-
-
+	
 	private int header_message(int http_code, OutputStream ops) {
 		PrintStream out = new PrintStream(ops);
 		switch (http_code) {
@@ -1246,7 +1336,7 @@ public int authorize_request() 	{
 			case 500: out.println("HTTP/1.1 500 Internal Server Error"); outputResponse(500,out); break;
 			default: out.println("HTTP/1.1 400 Bad Request"); break;
 		}
-		//out.println("Date: " + getDateTime());
+		//out.println("Date: " + psnf.getDateTime());
 		//out.println("Server: Service Controller");
 		//out.println("X-Powered-By: Java");
 		//out.println("Connection: close");
@@ -1254,9 +1344,10 @@ public int authorize_request() 	{
 		out.println("");
 		return http_code;
 	}
+
 	private void outputResponse(int http_code,PrintStream out) {
 		
-		out.println("Date: " + getDateTime());
+		out.println("Date: " + psnf.getDateTime());
 		out.println("Server: Service Controller");
 		out.println("X-Powered-By: Java");
 		out.println("Connection: close");
@@ -1272,6 +1363,7 @@ public int authorize_request() 	{
 			out.println("Content-Length: 0");
 		}
 	}
+
 }
 
 class SocketThrdServer {
