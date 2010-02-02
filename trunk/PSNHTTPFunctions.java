@@ -48,7 +48,7 @@ class PSNHTTPFunctions {
 		}
 	}
 
-	 private void output_connection_test_success(OutputStream ops) {
+	 public void output_connection_test_success(OutputStream ops) {
 
                 PrintStream out = new PrintStream(ops);
 

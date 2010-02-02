@@ -170,7 +170,7 @@ class ServiceInterface implements Runnable {
 				if (requested_path.equals("/connection/test")) {
 					
 					// Output a connection test success
-					output_connection_test_success(out);
+					psnf_http.output_connection_test_success(out);
 					
 					return true;
 		
