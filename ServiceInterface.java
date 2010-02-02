@@ -383,22 +383,6 @@ class ServiceInterface implements Runnable {
 		}
 	}
 
-	private void output_connection_test_success(OutputStream ops) {
-	
-		PrintStream out = new PrintStream(ops);
-	
-		out.println("HTTP/1.1 200 OK");
-		out.println("Date: " + psnf.getDateTime());
-		out.println("Server: Service Controller");
-		out.println("X-Powered-By: Java");
-		out.println("Connection: close");
-		out.println("Content-Type: text/plain; charset=utf-8");
-		out.println("Content-Length: 28");
-		out.println("");
-		out.println("aws sanity check succeeded!");
-	
-	}
-
 	private int send_head(OutputStream ops) {
 		PrintStream out = new PrintStream(ops);
 		try {
